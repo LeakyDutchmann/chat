@@ -1,4 +1,5 @@
 use chat::{routes, threadpool::ThreadPool};
+use colored::Colorize;
 
 use std::io::ErrorKind::UnexpectedEof;
 use std::net::{TcpListener, TcpStream};
@@ -7,8 +8,11 @@ use std::io::Write;
 
 
 fn main() -> std::io::Result<()> {
-    let listener = TcpListener::bind("127.0.0.1:80")?;
+    let address = "127.0.0.1:80".to_string();
+    let listener = TcpListener::bind(&address)?;
     let pool = ThreadPool::new(4);
+    let log = format!("Succesfully started server on address: {}", address.underline()).blue().bold();
+    println!("{}", log);
     for stream in listener.incoming() {
         let stream = stream?;
         pool.execute(|| {
