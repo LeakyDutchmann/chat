@@ -89,7 +89,11 @@ function subscribe(uri) {
 
   function connect(uri) {
     const events = new EventSource(uri);
-
+    // DEBUG: log raw SSE events
+    events.addEventListener("message", (ev) => {
+      console.log("RAW SSE EVENT:", ev.data);
+    });
+    
     events.addEventListener("message", (ev) => {
       console.log("raw data", JSON.stringify(ev.data));
       console.log("decoded data", JSON.stringify(JSON.parse(ev.data)));

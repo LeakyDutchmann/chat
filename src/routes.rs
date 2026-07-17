@@ -1,8 +1,11 @@
 use super::*;
 use crate::fileserver::serve_file;
+use tokio::sync::broadcast::Sender;
+use urlencoding::decode;
+use serde::Serialize;
 
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Route {
     Init,
     Js,
@@ -36,14 +39,15 @@ impl Route {
             }
         }
         if buffer.starts_with(b"POST /message HTTP/1.1") {
-            return Route::Message(String::from_utf8_lossy(&buffer).to_string());
+            let body = parse_request_body(String::from_utf8_lossy(buffer).to_string());
+            return Route::Message(body);
         }
         Route::Unexpected(String::from_utf8_lossy(buffer).to_string())
     }
 }
 
-#[derive(Clone)]
-struct ChatMessage {
+#[derive(Clone, Serialize)]
+pub struct ChatMessage {
     pub room: String,
     pub username: String,
     pub message: String
@@ -59,11 +63,12 @@ impl ChatMessage {
         };
         for part in parts {
             if let Some((a, b)) = part.split_once("=") {
+                let decoded = decode(b).ok()?.to_string();
                 match a {
-                    "room" => parsed.room = b.to_string(),
-                    "username" => parsed.username = b.to_string(),
-                    "message" => parsed.message = b.to_string(),
-                    _ => {return None}
+                    "room" => parsed.room = decoded,
+                    "username" => parsed.username = decoded,
+                    "message" => parsed.message = decoded,
+                    _ => { continue}
                 }
             }
         }
@@ -71,12 +76,11 @@ impl ChatMessage {
     }
 }
 
-pub fn handle_route(mut stream: TcpStream, buffer: [u8; 1024]) {
-    let route = Route::from_buffer(&buffer);
-    let (tx, _rx) = tokio::sync::broadcast::channel::<ChatMessage>(1024);
+pub async fn handle_routes(mut stream: TcpStream, buffer: &[u8], sender: Sender<ChatMessage>) {
+    let route = routes::Route::from_buffer(&buffer);
     match route {
         Route::Init => {
-            let result = serve_file(stream, "static/index.html", "text/html");
+            let result = serve_file(stream, "static/index.html", "text/html").await;
             match result {
                 Ok(_) => {}
                 Err(e) => {
@@ -85,7 +89,7 @@ pub fn handle_route(mut stream: TcpStream, buffer: [u8; 1024]) {
             }
         }
         Route::Js => {
-            let result = serve_file(stream, "static/script.js", "application/javascript");
+            let result = serve_file(stream, "static/script.js", "application/javascript").await;
             match result {
                 Ok(_) => {}
                 Err(e) => {
@@ -94,7 +98,7 @@ pub fn handle_route(mut stream: TcpStream, buffer: [u8; 1024]) {
             }
         }
         Route::CssReset => {
-            let result = serve_file(stream, "static/reset.css", "text/css");
+            let result = serve_file(stream, "static/reset.css", "text/css").await;
             match result {
                 Ok(_) => {}
                 Err(e) => {
@@ -103,7 +107,7 @@ pub fn handle_route(mut stream: TcpStream, buffer: [u8; 1024]) {
             }
         }
         Route::StyleCss => {
-            let result = serve_file(stream, "static/style.css", "text/css");
+            let result = serve_file(stream, "static/style.css", "text/css").await;
             match result {
                 Ok(_) => {}
                 Err(e) => {
@@ -112,38 +116,42 @@ pub fn handle_route(mut stream: TcpStream, buffer: [u8; 1024]) {
             }
         }
         Route::Icon => {
-            println!("got icon request");
+            return;
         }
         Route::Events => {
-            let response = format!("HTTP/1.1 OK 200\r\nContent-type: text/event-stream\r\nCashe-Control: no-cache\r\nConnection: keep-alive\r\n\r\n");
-            stream.write(response.as_bytes()).ok();
-            stream.flush().ok();
-            let mut rx_sub = tx.subscribe();
-            tokio::spawn(async move{
-                loop {
-                    while let Ok(message) = rx_sub.recv().await {
-                        let data = format!("data: {}\n\n", message.message);
-                        stream.write(data.as_bytes()).ok();
-                        stream.flush().ok();
+            let header = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: keep-alive\r\n\r\n";
+            let _ = stream.write_all(header.as_bytes()).await;
+            let mut rx = sender.subscribe();
+            loop {
+                match rx.recv().await {
+                    Ok(msg) => {
+                        let json = serde_json::to_string(&msg).unwrap();
+                        let data = format!("data: {}\n\n", json);
+                        if stream.write_all(data.as_bytes()).await.is_err() {
+                            println!("Client disconected");
+                            return;
+                        } else {
+                            println!("message sent");
+                        }
+                    },
+                    Err(e) => {
+                        println!("Broadcast channel closed: {}", e);
+                        return;
                     }
+                    
                 }
-                
-            });
-        }
-        Route::Message(request) => {
-            let body = parse_request_body(request);
-            if let Some(message) = ChatMessage::from_form(body) {
-                tx.send(message).ok();
-                let response = format!("HTTP/1.1 OK 200");
-                stream.write(response.as_bytes()).ok();
-                stream.flush().ok();
             }
         }
-        Route::Unexpected(req) => {
-            println!("got unexpected request: {}", req);
+        Route::Message(form) => {
+            let message = ChatMessage::from_form(form).expect("Failed to parse the message");
+            let _ = sender.send(message);
+        }
+        Route::Unexpected(value) => {
+            println!("Got unexpected route: {}", value);
         }
     }
 }
+
 
 fn parse_request_body(request: String) -> String {
     let lines: Vec<String> = request.lines().map(|l| l.to_string()).collect();
