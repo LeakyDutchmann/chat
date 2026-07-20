@@ -63,7 +63,11 @@ impl ChatMessage {
         };
         for part in parts {
             if let Some((a, b)) = part.split_once("=") {
-                let decoded = decode(b).ok()?.to_string();
+                let mut decoded = decode(b.trim()).ok()?.to_string();
+                decoded = decoded.replace("+", " ");
+                if decoded.contains('+') {
+                    println!("invalid character: {}", decoded);
+                }
                 match a {
                     "room" => parsed.room = decoded,
                     "username" => parsed.username = decoded,
@@ -145,6 +149,9 @@ pub async fn handle_routes(mut stream: TcpStream, buffer: &[u8], sender: Sender<
         Route::Message(form) => {
             let message = ChatMessage::from_form(form).expect("Failed to parse the message");
             let _ = sender.send(message);
+            let response = format!("HTTP/1.1 OK 200");
+            let _ = stream.write_all(response.as_bytes()).await;
+            let _ = stream.flush().await;
         }
         Route::Unexpected(value) => {
             println!("Got unexpected route: {}", value);
