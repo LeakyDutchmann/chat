@@ -18,6 +18,7 @@ async fn main() -> io::Result<()> {
     println!("Listening on 127.0.0.1:8080");
 
     loop {
+        let pool = db_pool.clone();
         let (mut stream, addr) = listener.accept().await?;
         let tx_cloned = tx.clone();
         println!("Accepted connection from {}", addr);
@@ -37,7 +38,7 @@ async fn main() -> io::Result<()> {
                     return;
                 }
             };
-            routes::handle_routes(stream, &buffer[0..n], tx_cloned).await;
+            routes::handle_routes(stream, &buffer[0..n], tx_cloned, pool).await;
         });
     }
 }

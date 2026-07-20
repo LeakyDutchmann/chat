@@ -128,6 +128,34 @@ function setConnectedStatus(status) {
   statusDiv.className = (status) ? "connected" : "reconnecting";
 }
 
+//Upload history
+async function uploadHistory() {
+  try {
+    const response = await fetch("/history");
+    if (!response.ok) {
+      console.error("Failed to load history");
+      return;
+    }
+
+    const history = await response.json();
+
+    // history is an array of { room, username, message }
+    history.forEach(msg => {
+      // Ensure the room exists
+      if (!STATE[msg.room]) {
+        addRoom(msg.room);
+      }
+
+      // Add message to STATE and render if active
+      addMessage(msg.room, msg.username, msg.message, true,);
+
+    });
+
+  } catch (err) {
+    console.error("Error loading history:", err);
+  }
+}
+
 // Let's go! Initialize the world.
 function init() {
   // Initialize some rooms.
@@ -168,7 +196,8 @@ function init() {
 
     addMessage(room, "Rocket", `Look, your own "${room}" room! Nice.`, true);
   })
-
+  
+  uploadHistory();
   // Subscribe to server-sent events.
   subscribe("/events");
 }

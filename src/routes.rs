@@ -3,6 +3,7 @@ use crate::fileserver::serve_file;
 use tokio::sync::broadcast::Sender;
 use urlencoding::decode;
 use serde::Serialize;
+use sqlx::{self, mysql::{MySqlPool, MySqlRow}, query, FromRow, Row};
 
 
 #[derive(Clone, Debug)]
@@ -13,6 +14,7 @@ pub enum Route {
     StyleCss,
     Icon,
     Events,
+    History,
     Message(String),
     Unexpected(String)
 }
@@ -29,6 +31,7 @@ static ROUTES: &[RouteEntry] = &[
     RouteEntry { path: b"GET /style.css HTTP/1.1", route: Route::StyleCss },
     RouteEntry { path: b"GET /favicon.ico HTTP/1.1", route: Route::Icon },
     RouteEntry { path: b"GET /events HTTP/1.1", route: Route::Events},
+    RouteEntry { path: b"GET /history HTTP/1.1", route: Route::History },
 ];
 
 impl Route {
@@ -80,7 +83,21 @@ impl ChatMessage {
     }
 }
 
-pub async fn handle_routes(mut stream: TcpStream, buffer: &[u8], sender: Sender<ChatMessage>) {
+impl FromRow<'_, MySqlRow> for ChatMessage {
+    fn from_row(row: &MySqlRow) -> Result<ChatMessage, sqlx::Error> {
+        let room: String = row.try_get("room")?;
+        let username: String = row.try_get("username")?;
+        let message: String = row.try_get("message")?;
+        Ok(ChatMessage {
+            room: room,
+            username: username,
+            message: message,
+        })
+    }
+}
+
+
+pub async fn handle_routes(mut stream: TcpStream, buffer: &[u8], sender: Sender<ChatMessage>, db_pool: MySqlPool) {
     let route = routes::Route::from_buffer(&buffer);
     match route {
         Route::Init => {
@@ -148,15 +165,41 @@ pub async fn handle_routes(mut stream: TcpStream, buffer: &[u8], sender: Sender<
         }
         Route::Message(form) => {
             let message = ChatMessage::from_form(form).expect("Failed to parse the message");
+            let _ = save_to_db(message.clone(), &db_pool).await;
             let _ = sender.send(message);
             let response = format!("HTTP/1.1 OK 200");
             let _ = stream.write_all(response.as_bytes()).await;
             let _ = stream.flush().await;
-        }
+            
+        },
+        Route::History => {
+            let rows_opt: Option<Vec<ChatMessage>> = sqlx::query_as("SELECT * FROM messages")
+                .fetch_all(&db_pool)
+                .await.ok();
+            if let Some(rows) = rows_opt {
+                let json = serde_json::to_string(&rows).unwrap();
+                let response = format!("HTTP/1.1 OK 200\r\nContent-Type: application/json\r\n\r\n{}", json);
+                let _ = stream.write_all(response.as_bytes()).await;
+                let _ = stream.flush().await;
+            }
+        },
         Route::Unexpected(value) => {
             println!("Got unexpected route: {}", value);
         }
     }
+}
+
+pub async fn save_to_db(message: ChatMessage, db: &MySqlPool) -> anyhow::Result<()> {
+    let result = sqlx::query("INSERT INTO messages(room, username, message) VALUES(?, ?, ?)")
+        .bind(message.room)
+        .bind(message.username)
+        .bind(message.message)
+        .execute(db)
+        .await?;
+    if result.rows_affected() > 0 {
+        println!("Message saved to database");
+    }
+    Ok(())
 }
 
 
