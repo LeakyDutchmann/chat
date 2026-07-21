@@ -11,6 +11,9 @@ let messageField = newMessageForm.querySelector("#message");
 let usernameField = newMessageForm.querySelector("#username");
 let roomNameField = newRoomForm.querySelector("#name");
 
+let socket = new WebSocket("ws://localhost:8080/ws");
+
+
 var STATE = {
   room: "lobby",
   rooms: {},
@@ -158,6 +161,33 @@ async function uploadHistory() {
 
 // Let's go! Initialize the world.
 function init() {
+  uploadHistory();
+
+  
+
+  socket.onopen = () => {
+    console.log("WS connected");
+    setConnectedStatus(true);
+  };
+  
+  socket.onclose = () => {
+    console.log("WS disconnected");
+    setConnectedStatus(false);
+  };
+  
+  socket.onerror = (err) => {
+    console.error("WS error:", err);
+  };
+
+  socket.onmessage = (event) => {
+    const msg = JSON.parse(event.data);
+  
+    if (!msg.room || !msg.username || !msg.message) return;
+  
+    addMessage(msg.room, msg.username, msg.message, true);
+  };
+
+  
   // Initialize some rooms.
   addRoom("lobby");
   addRoom("rocket");
@@ -168,21 +198,19 @@ function init() {
   // Set up the form handler.
   newMessageForm.addEventListener("submit", (e) => {
     e.preventDefault();
-
+  
     const room = STATE.room;
     const message = messageField.value;
     const username = usernameField.value || "guest";
+  
     if (!message || !username) return;
-
-    if (STATE.connected) {
-      fetch("/message", {
-        method: "POST",
-        body: new URLSearchParams({ room, username, message }),
-      }).then((response) => {
-        if (response.ok) messageField.value = "";
-      });
+  
+    if (socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ room, username, message }));
+      messageField.value = "";
     }
-  })
+  });
+
 
   // Set up the new room handler.
   newRoomForm.addEventListener("submit", (e) => {
@@ -196,10 +224,6 @@ function init() {
 
     addMessage(room, "Rocket", `Look, your own "${room}" room! Nice.`, true);
   })
-  
-  uploadHistory();
-  // Subscribe to server-sent events.
-  subscribe("/events");
 }
 
 init();

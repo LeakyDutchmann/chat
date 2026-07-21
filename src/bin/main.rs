@@ -8,6 +8,7 @@ use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
 use tokio::sync::broadcast::Sender;
 use std::time::Duration;
 use sqlx::{self, mysql::{MySqlPoolOptions, MySqlPool}};
+use tokio::signal;
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
@@ -16,7 +17,6 @@ async fn main() -> io::Result<()> {
     let db_url = "mysql://root:Tima1405pereviz@localhost:3306/chat_db";
     let db_pool = estabilish_connection(db_url).await.unwrap();
     println!("Listening on 127.0.0.1:8080");
-
     loop {
         let pool = db_pool.clone();
         let (mut stream, addr) = listener.accept().await?;
