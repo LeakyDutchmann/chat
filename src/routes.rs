@@ -23,6 +23,7 @@ pub enum Route {
     Icon,
     WebSocket,
     History,
+    Register(AuthForm),
     Unexpected(String)
 }
 
@@ -38,8 +39,62 @@ static ROUTES: &[RouteEntry] = &[
     RouteEntry { path: b"GET /style.css HTTP/1.1", route: Route::StyleCss },
     RouteEntry { path: b"GET /favicon.ico HTTP/1.1", route: Route::Icon },
     RouteEntry { path: b"GET /history HTTP/1.1", route: Route::History },
-    RouteEntry { path: b"GET /ws HTTP/1.1", route: Route::WebSocket}
+    RouteEntry { path: b"GET /ws HTTP/1.1", route: Route::WebSocket},
 ];
+
+#[derive(Clone, Debug, Serialize)]
+pub struct AuthResponse {
+    pub status: String,
+    pub message: String,
+}
+
+impl AuthResponse {
+    pub fn from(status: &str, message: &str) -> AuthResponse {
+        AuthResponse {
+            status: status.to_string(),
+            message: message.to_string(),
+        }
+    }
+}
+
+
+#[derive(Clone, Debug)]
+pub struct AuthForm {
+    pub username: String,
+    pub password: String,
+    pub color: String
+}
+
+impl AuthForm {
+    pub fn from_buffer(buffer: &[u8]) -> AuthForm {
+        let body = parse_request_body(String::from_utf8_lossy(buffer).to_string());
+        let mut form = AuthForm {
+            username: String::new(),
+            password: String::new(),
+            color: String::new()
+        };
+        let parts: Vec<&str> = body.split('&').collect();
+        for part in parts {
+            let (a, b) = part.split_once("=").unwrap();
+            let decoded = decode(b.trim()).unwrap().replace("+", " ");
+            match a {
+                "username" => {
+                    form.username = decoded;
+                }
+                "password" => {
+                    form.password = decoded;
+                }
+                "color" => {
+                    form.color = decoded;
+                }
+                _ => {
+                    continue;
+                }
+            }
+        }
+        form
+    }
+}
 
 // static ROUTES: &[RouteEntry] = &[
 //     RouteEntry { path: b"GET / HTTP/1.1", route: Route::Init },
@@ -53,6 +108,9 @@ static ROUTES: &[RouteEntry] = &[
 
 impl Route {
     pub fn from_buffer(buffer: &[u8]) -> Route {
+        if buffer.starts_with(b"POST /register HTTP/1.1") {
+            return Route::Register(AuthForm::from_buffer(buffer));
+        }
         for route_ent in ROUTES {
             if buffer.starts_with(route_ent.path) {
                 return route_ent.route.clone();
@@ -152,6 +210,41 @@ pub async fn handle_routes(mut stream: TcpStream, buffer: &[u8], sender: Sender<
         Route::Icon => {
             return;
         }
+        Route::Register(form) => {
+            let result = sqlx::query("SELECT username FROM users WHERE username = ?")
+                .bind(&form.username)
+                .fetch_one(&db_pool)
+                .await.ok();
+            if result.is_some() {
+                let status = AuthResponse::from("error, user already exists", "Error, user already exists");
+                let json = serde_json::to_string(&status).unwrap();
+                let len = json.len();
+                let response = format!("HTTP/1.1 OK 200\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}", len, json);
+                let _ = stream.write_all(response.as_bytes()).await;
+                return;
+            }
+            let password_hash = &form.password;
+            let result = sqlx::query("INSERT INTO users(username, password_hash, color) values(?, ?, ?)")
+                .bind(&form.username)
+                .bind(password_hash)
+                .bind(&form.color)
+                .execute(&db_pool)
+                .await;
+            match result {
+                Ok(_) => {
+                    println!("User saved to a db succesfully");
+                    let status = AuthResponse::from("ok", "User is succesfully registered");
+                    let json = serde_json::to_string(&status).unwrap();
+                    let len = json.len();
+                    let response = format!("HTTP/1.1 Ok 200\r\nContent-Type: application/json\r\nContent-length: {}\r\n\r\n{}", len, json);
+                    let _ = stream.write_all(response.as_bytes()).await;
+                    let _ = stream.flush().await;
+                }
+                Err(e) => {
+                    println!("Error: {}", e);
+                }
+            }
+        }
         Route::History => {
             let rows_opt: Option<Vec<ChatMessage>> = sqlx::query_as("SELECT * FROM messages")
                 .fetch_all(&db_pool)
@@ -159,6 +252,7 @@ pub async fn handle_routes(mut stream: TcpStream, buffer: &[u8], sender: Sender<
             if let Some(rows) = rows_opt {
                 let json = serde_json::to_string(&rows).unwrap();
                 let response = format!("HTTP/1.1 OK 200\r\nContent-Type: application/json\r\n\r\n{}", json);
+                println!("resp OK");
                 let _ = stream.write_all(response.as_bytes()).await;
                 let _ = stream.flush().await;
             }

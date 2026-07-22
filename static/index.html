@@ -8,7 +8,22 @@
     <script src="/script.js" charset="utf-8" defer></script>
   </head>
   <body>
-    <main>
+    <div id="auth">
+        <h2>Login / Register</h2>
+    
+        <form id="auth-form">
+            <input type="text" id="auth-username" placeholder="username" autocomplete="off">
+            <input type="password" id="auth-password" placeholder="password" autocomplete="off">
+            <input type="text" id="auth-color" placeholder="color (optional)" autocomplete="off">
+    
+            <button type="button" id="auth-login">Login</button>
+            <button type="button" id="auth-register">Register</button>
+        </form>
+    
+        <div id="auth-status"></div>
+    </div>
+        
+    <main id="chat" style="display:none;">
       <div id="sidebar">
         <div id="status" class="pending"></div>
 

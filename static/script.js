@@ -11,13 +11,94 @@ let messageField = newMessageForm.querySelector("#message");
 let usernameField = newMessageForm.querySelector("#username");
 let roomNameField = newRoomForm.querySelector("#name");
 
-let socket = new WebSocket("ws://localhost:8080/ws");
-
 
 var STATE = {
   room: "lobby",
   rooms: {},
   connected: false,
+}
+// listeners 
+
+// Set up the form handler.
+newMessageForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+
+  const room = STATE.room;
+  const message = messageField.value;
+  const username = usernameField.value || "guest";
+
+  if (!message || !username) return;
+
+  if (socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ room, username, message }));
+    messageField.value = "";
+  }
+});
+
+
+// Set up the new room handler.
+newRoomForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+
+  const room = roomNameField.value;
+  if (!room) return;
+
+  roomNameField.value = "";
+  if (!addRoom(room)) return;
+
+  addMessage(room, "Rocket", `Look, your own "${room}" room! Nice.`, true);
+})
+
+async function sendAuthRequest(type) {
+  const username = document.getElementById("auth-username").value;
+  const password = document.getElementById("auth-password").value;
+  const color = document.getElementById("auth-color").value;
+
+  if (!username || !password) {
+    authStatus.textContent = "Username and password required";
+    return;
+  }
+
+  const body = new URLSearchParams();
+  body.append("username", username);
+  body.append("password", password);
+  if (color) body.append("color", color);
+
+  const response = await fetch(`/${type}`, {
+    method: "POST",
+    body
+  });
+
+  const data = await response.json();
+  authStatus.textContent = data.message;
+
+  if (data.status.includes("succesfully logged in") || data.status === "ok") {
+      STATE.username = username;
+      STATE.color = color || "white";   // ⭐ store chosen color
+      document.getElementById("chat").style.display = "flex";
+      document.getElementById("auth").style.display = "none";
+    
+      // window.shouldReconnect = true;
+      await uploadHistory();
+      connectWebSocket();
+  }
+}
+
+function setupAuth() {
+  const authForm = document.getElementById("auth-form");
+  const loginBtn = document.getElementById("auth-login");
+  const registerBtn = document.getElementById("auth-register");
+  window.authStatus = document.getElementById("auth-status");
+
+  loginBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    sendAuthRequest("login");
+  });
+
+  registerBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    sendAuthRequest("register");
+  });
 }
 
 // Generate a color from a "hash" of a string. Thanks, internet.
@@ -86,51 +167,11 @@ function addMessage(room, username, message, push = false) {
   }
 }
 
-// Subscribe to the event source at `uri` with exponential backoff reconnect.
-function subscribe(uri) {
-  var retryTime = 1;
-
-  function connect(uri) {
-    const events = new EventSource(uri);
-    // DEBUG: log raw SSE events
-    events.addEventListener("message", (ev) => {
-      console.log("RAW SSE EVENT:", ev.data);
-    });
-    
-    events.addEventListener("message", (ev) => {
-      console.log("raw data", JSON.stringify(ev.data));
-      console.log("decoded data", JSON.stringify(JSON.parse(ev.data)));
-      const msg = JSON.parse(ev.data);
-      if (!("message" in msg) || !("room" in msg) || !("username" in msg)) return;
-      addMessage(msg.room, msg.username, msg.message, true);
-    });
-
-    events.addEventListener("open", () => {
-      setConnectedStatus(true);
-      console.log(`connected to event stream at ${uri}`);
-      retryTime = 1;
-    });
-
-    events.addEventListener("error", () => {
-      setConnectedStatus(false);
-      events.close();
-
-      let timeout = retryTime;
-      retryTime = Math.min(64, retryTime * 2);
-      console.log(`connection lost. attempting to reconnect in ${timeout}s`);
-      setTimeout(() => connect(uri), (() => timeout * 1000)());
-    });
-  }
-
-  connect(uri);
-}
-
 // Set the connection status: `true` for connected, `false` for disconnected.
 function setConnectedStatus(status) {
   STATE.connected = status;
   statusDiv.className = (status) ? "connected" : "reconnecting";
 }
-
 //Upload history
 async function uploadHistory() {
   try {
@@ -159,24 +200,33 @@ async function uploadHistory() {
   }
 }
 
-// Let's go! Initialize the world.
-function init() {
-  uploadHistory();
+function connectWebSocket() {
+  console.log("Connecting to a WS");
+  // if (window.shouldReconnect === false) {
+  //   console.log("Reconnect disabled (logged out)");
+  //   return;
+  // }
+  if (!STATE.username) {
+    console.log("Not logged in, WS disabled");
+    return;
+  }
 
-  
+  let ws = new WebSocket("ws://localhost:8080/ws");
 
-  socket.onopen = () => {
-    console.log("WS connected");
+  ws.onopen = () => {
     setConnectedStatus(true);
+    console.log("WebSocket connected");
   };
-  
-  socket.onclose = () => {
-    console.log("WS disconnected");
+
+  ws.onclose = () => {
     setConnectedStatus(false);
+    console.log("WebSocket disconnected");
   };
-  
-  socket.onerror = (err) => {
-    console.error("WS error:", err);
+
+  ws.onerror = () => {
+    setConnectedStatus(false);
+    console.log("WebSocket error");
+    ws.close();
   };
 
   socket.onmessage = (event) => {
@@ -187,7 +237,12 @@ function init() {
     addMessage(msg.room, msg.username, msg.message, true);
   };
 
-  
+  window.chatSocket = ws;
+}
+
+// Let's go! Initialize the world.
+function init() {
+
   // Initialize some rooms.
   addRoom("lobby");
   addRoom("rocket");
@@ -195,35 +250,8 @@ function init() {
   addMessage("lobby", "Rocket", "Hey! Open another browser tab, send a message.", true);
   addMessage("rocket", "Rocket", "This is another room. Neat, huh?", true);
 
-  // Set up the form handler.
-  newMessageForm.addEventListener("submit", (e) => {
-    e.preventDefault();
   
-    const room = STATE.room;
-    const message = messageField.value;
-    const username = usernameField.value || "guest";
-  
-    if (!message || !username) return;
-  
-    if (socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify({ room, username, message }));
-      messageField.value = "";
-    }
-  });
-
-
-  // Set up the new room handler.
-  newRoomForm.addEventListener("submit", (e) => {
-    e.preventDefault();
-
-    const room = roomNameField.value;
-    if (!room) return;
-
-    roomNameField.value = "";
-    if (!addRoom(room)) return;
-
-    addMessage(room, "Rocket", `Look, your own "${room}" room! Nice.`, true);
-  })
 }
 
+setupAuth();
 init();
