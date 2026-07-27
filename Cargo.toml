@@ -5,10 +5,12 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.104"
+argon2 = "0.5.3"
 base64 = "0.22.1"
 colored = "3.1.1"
 dotenvy = "0.15.7"
 futures-util = "0.3.32"
+rand_core = { version = "0.6", features = ["std"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
 sha1 = "0.11.0"

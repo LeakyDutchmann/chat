@@ -29,9 +29,9 @@ newMessageForm.addEventListener("submit", (e) => {
 
   if (!message || !username) return;
 
-  if (socket.readyState === WebSocket.OPEN) {
-    socket.send(JSON.stringify({ room, username, message }));
-    messageField.value = "";
+  if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
+      chatSocket.send(JSON.stringify({ room, username, message }));
+      messageField.value = "";
   }
 });
 
@@ -229,7 +229,7 @@ function connectWebSocket() {
     ws.close();
   };
 
-  socket.onmessage = (event) => {
+  ws.onmessage = (event) => {
     const msg = JSON.parse(event.data);
   
     if (!msg.room || !msg.username || !msg.message) return;

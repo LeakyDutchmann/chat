@@ -1,6 +1,13 @@
 use super::*;
 use crate::routes::auth::form::{AuthResponse, AuthForm};
 use sqlx::mysql::MySqlPool;
+use argon2::{
+    password_hash::{
+        PasswordHash, PasswordHasher, PasswordVerifier, SaltString
+    },
+    Argon2,
+};
+use rand_core::OsRng;
 
 pub async fn handle_registration(mut stream: TcpStream, db_pool: MySqlPool, form: AuthForm) {
     let result = sqlx::query("SELECT username FROM users WHERE username = ?")
@@ -15,7 +22,7 @@ pub async fn handle_registration(mut stream: TcpStream, db_pool: MySqlPool, form
         let _ = stream.write_all(response.as_bytes()).await;
         return;
     }
-    let password_hash = &form.password;
+    let password_hash = hash_password(&form.password).expect("called unwrap on None password");
     let result = sqlx::query("INSERT INTO users(username, password_hash, color) values(?, ?, ?)")
         .bind(&form.username)
         .bind(password_hash)
@@ -36,6 +43,13 @@ pub async fn handle_registration(mut stream: TcpStream, db_pool: MySqlPool, form
             println!("Error: {}", e);
         }
     }
+}
+
+pub fn hash_password(password: &str) -> Option<String> {
+    let salt = SaltString::generate(&mut OsRng);
+    let argon2 = Argon2::default();
+    let password_hash = argon2.hash_password(password.as_bytes(), &salt).ok()?.to_string();
+    Some(password_hash)
 }
 
 pub async fn handle_authentication(mut stream: TcpStream, db_pool: MySqlPool, form: AuthForm) {
