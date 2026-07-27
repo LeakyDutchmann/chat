@@ -1,12 +1,13 @@
 use chat::routes::routes;
+use chat::routes::chat::models::ChatMessage;
+use chat::routes::db::estabilish_connection;
 use colored::Colorize;
-use routes::ChatMessage;
+
 
 use std::io::ErrorKind::UnexpectedEof;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
 use tokio::sync::broadcast::Sender;
-use std::time::Duration;
 use sqlx::{self, mysql::{MySqlPoolOptions, MySqlPool}};
 use tokio::signal;
 
@@ -42,15 +43,3 @@ async fn main() -> io::Result<()> {
         });
     }
 }
-
-pub async fn estabilish_connection(db_url: &str) -> anyhow::Result<MySqlPool> {
-    let pool = MySqlPoolOptions::new()
-        .max_connections(50)
-        .acquire_timeout(Duration::from_secs(3))
-        .idle_timeout(Duration::from_secs(10))
-        .connect(db_url)
-        .await?;
-    Ok(pool)
-}
-
-
