@@ -1,5 +1,5 @@
 use super::*;
-use crate::fileserver::serve_file;
+use fileserver::serve_file;
 use tokio::sync::broadcast::Sender;
 use urlencoding::decode;
 use serde::{Serialize, Deserialize};
@@ -24,6 +24,7 @@ pub enum Route {
     WebSocket,
     History,
     Register(AuthForm),
+    Login(AuthForm),
     Unexpected(String)
 }
 
@@ -110,6 +111,9 @@ impl Route {
     pub fn from_buffer(buffer: &[u8]) -> Route {
         if buffer.starts_with(b"POST /register HTTP/1.1") {
             return Route::Register(AuthForm::from_buffer(buffer));
+        }
+        if buffer.starts_with(b"POST /login HTTP/1.1") {
+            return Route::Login(AuthForm::from_buffer(buffer));
         }
         for route_ent in ROUTES {
             if buffer.starts_with(route_ent.path) {
@@ -244,6 +248,9 @@ pub async fn handle_routes(mut stream: TcpStream, buffer: &[u8], sender: Sender<
                     println!("Error: {}", e);
                 }
             }
+        }
+        Route::Login(form) => {
+            
         }
         Route::History => {
             let rows_opt: Option<Vec<ChatMessage>> = sqlx::query_as("SELECT * FROM messages")

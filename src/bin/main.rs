@@ -1,4 +1,4 @@
-use chat::routes;
+use chat::routes::routes;
 use colored::Colorize;
 use routes::ChatMessage;
 
