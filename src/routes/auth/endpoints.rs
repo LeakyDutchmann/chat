@@ -1,6 +1,8 @@
 use super::*;
 use crate::routes::auth::form::{AuthResponse, AuthForm};
 use sqlx::mysql::MySqlPool;
+use sqlx::Row;
+
 use argon2::{
     password_hash::{
         PasswordHash, PasswordHasher, PasswordVerifier, SaltString
@@ -53,5 +55,30 @@ pub fn hash_password(password: &str) -> Option<String> {
 }
 
 pub async fn handle_authentication(mut stream: TcpStream, db_pool: MySqlPool, form: AuthForm) {
+    let row = sqlx::query("SELECT password_hash, color FROM users WHERE username =?")
+        .bind(&form.username)
+        .fetch_optional(&db_pool)
+        .await.unwrap();
+    if row.is_none() {
+        let status = AuthResponse::from("error", "User does not exist");
+        let status_str = serde_json::to_string(&status).unwrap();
+        let len = status_str.len();
+        let response = format!("HTTP/1.1 OK 200\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}", len, status_str);
+        let _ = stream.write_all(response.as_bytes()).await;
+        let _ = stream.flush().await;
+    } else {
+        let password_hash: String = row.unwrap().try_get("password_hash").unwrap();
+        let parsed_hash = PasswordHash::new(&password_hash).unwrap();
+        let argon2 = Argon2::default();
+        if argon2.verify_password(form.password.as_bytes(), &parsed_hash).is_ok() {
+            let status = AuthResponse::from("succesfully logged in", "Succesfully logged in");
+            let status_str = serde_json::to_string(&status).unwrap();
+            let len = status_str.len();
+            let response = format!("HTTP/1.1 OK 200\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}", len, status_str);
 
+            let _ = stream.write_all(response.as_bytes()).await;
+            let _ = stream.flush().await;
+        }
+        
+    }
 }
