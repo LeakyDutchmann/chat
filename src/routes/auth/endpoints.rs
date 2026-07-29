@@ -2,6 +2,7 @@ use super::*;
 use crate::routes::auth::form::{AuthResponse, AuthForm};
 use sqlx::mysql::MySqlPool;
 use sqlx::Row;
+use cookie::{Cookie, SameSite};
 
 use argon2::{
     password_hash::{
@@ -37,14 +38,38 @@ pub async fn handle_registration(mut stream: TcpStream, db_pool: MySqlPool, form
             let status = AuthResponse::from("ok", "User is succesfully registered");
             let json = serde_json::to_string(&status).unwrap();
             let len = json.len();
-            let response = format!("HTTP/1.1 Ok 200\r\nContent-Type: application/json\r\nContent-length: {}\r\n\r\n{}", len, json);
+            let cookie = create_session(db_pool, form.username).await;
+            let response = format!("HTTP/1.1 Ok 200\r\nSet-Cookie: {}\r\nContent-Type: application/json\r\nContent-length: {}\r\n\r\n{}", cookie, len, json);
             let _ = stream.write_all(response.as_bytes()).await;
             let _ = stream.flush().await;
+            println!("Session created for user");
         }
         Err(e) => {
             println!("Error: {}", e);
         }
     }
+}
+//returng cookie as a string, so I save space in caller function
+pub async fn create_session(db_pool: MySqlPool, username: String) -> String {
+    let session_id = create_session_id(&username).await;
+    let _ = sqlx::query("INSERT INTO session(username, session_id) values(?, ?)")
+        .bind(username)
+        .bind(session_id.clone())
+        .execute(&db_pool)
+        .await.unwrap();
+    let cookie = Cookie::build(("session", session_id))
+        .path("/")
+        .http_only(true)
+        .same_site(SameSite::Lax)
+        .build();
+    cookie.to_string()
+}
+
+pub async fn create_session_id(username: &str) -> String {
+    let now = chrono::Utc::now();
+    let time =  now.time().to_string();
+    let raw = time + username + "cookie";
+    raw
 }
 
 pub fn hash_password(password: &str) -> Option<String> {
@@ -74,8 +99,8 @@ pub async fn handle_authentication(mut stream: TcpStream, db_pool: MySqlPool, fo
             let status = AuthResponse::from("succesfully logged in", "Succesfully logged in");
             let status_str = serde_json::to_string(&status).unwrap();
             let len = status_str.len();
-            let response = format!("HTTP/1.1 OK 200\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}", len, status_str);
-
+            let cookie = create_session(db_pool, form.username).await;
+            let response = format!("HTTP/1.1 OK 200\r\nContent-Type: application/json\r\nContent-Length: {}\r\nSet-Cookie: {}\r\n\r\n{}", len, cookie, status_str);
             let _ = stream.write_all(response.as_bytes()).await;
             let _ = stream.flush().await;
         }
