@@ -211,7 +211,7 @@ function connectWebSocket() {
     return;
   }
 
-  let ws = new WebSocket("ws://localhost:8080/ws");
+  let ws = new WebSocket("ws://127.0.0.1:8080/ws");
 
   ws.onopen = () => {
     setConnectedStatus(true);

@@ -1,9 +1,7 @@
 use super::*;
 use crate::routes::auth::form::{AuthResponse, AuthForm};
-use sqlx::mysql::MySqlPool;
+use sessions::create_session;
 use sqlx::Row;
-use cookie::{Cookie, SameSite};
-
 use argon2::{
     password_hash::{
         PasswordHash, PasswordHasher, PasswordVerifier, SaltString
@@ -11,6 +9,13 @@ use argon2::{
     Argon2,
 };
 use rand_core::OsRng;
+
+pub fn hash_password(password: &str) -> Option<String> {
+    let salt = SaltString::generate(&mut OsRng);
+    let argon2 = Argon2::default();
+    let password_hash = argon2.hash_password(password.as_bytes(), &salt).ok()?.to_string();
+    Some(password_hash)
+}
 
 pub async fn handle_registration(mut stream: TcpStream, db_pool: MySqlPool, form: AuthForm) {
     let result = sqlx::query("SELECT username FROM users WHERE username = ?")
@@ -34,7 +39,6 @@ pub async fn handle_registration(mut stream: TcpStream, db_pool: MySqlPool, form
         .await;
     match result {
         Ok(_) => {
-            println!("User saved to a db succesfully");
             let status = AuthResponse::from("ok", "User is succesfully registered");
             let json = serde_json::to_string(&status).unwrap();
             let len = json.len();
@@ -42,42 +46,13 @@ pub async fn handle_registration(mut stream: TcpStream, db_pool: MySqlPool, form
             let response = format!("HTTP/1.1 Ok 200\r\nSet-Cookie: {}\r\nContent-Type: application/json\r\nContent-length: {}\r\n\r\n{}", cookie, len, json);
             let _ = stream.write_all(response.as_bytes()).await;
             let _ = stream.flush().await;
-            println!("Session created for user");
         }
         Err(e) => {
             println!("Error: {}", e);
         }
     }
 }
-//returng cookie as a string, so I save space in caller function
-pub async fn create_session(db_pool: MySqlPool, username: String) -> String {
-    let session_id = create_session_id(&username).await;
-    let _ = sqlx::query("INSERT INTO session(username, session_id) values(?, ?)")
-        .bind(username)
-        .bind(session_id.clone())
-        .execute(&db_pool)
-        .await.unwrap();
-    let cookie = Cookie::build(("session", session_id))
-        .path("/")
-        .http_only(true)
-        .same_site(SameSite::Lax)
-        .build();
-    cookie.to_string()
-}
 
-pub async fn create_session_id(username: &str) -> String {
-    let now = chrono::Utc::now();
-    let time =  now.time().to_string();
-    let raw = time + username + "cookie";
-    raw
-}
-
-pub fn hash_password(password: &str) -> Option<String> {
-    let salt = SaltString::generate(&mut OsRng);
-    let argon2 = Argon2::default();
-    let password_hash = argon2.hash_password(password.as_bytes(), &salt).ok()?.to_string();
-    Some(password_hash)
-}
 
 pub async fn handle_authentication(mut stream: TcpStream, db_pool: MySqlPool, form: AuthForm) {
     let row = sqlx::query("SELECT password_hash, color FROM users WHERE username =?")
