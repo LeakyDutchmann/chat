@@ -1,7 +1,7 @@
 use super::*;
 use crate::routes::{http::{get_ws_key}, chat::models::ChatMessage};
 use crate::routes::db::save_to_db;
-use auth::sessions::get_session_id;
+use auth::sessions::{get_session_id, verify_session};
 use tokio::select;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::WebSocketStream;
@@ -16,6 +16,18 @@ use serde_json::from_str;
 pub async fn handle_websocket(mut stream: TcpStream, buffer: &[u8], sender: Sender<ChatMessage>, db_pool: MySqlPool) {
     let ws_key = get_ws_key(String::from_utf8_lossy(&buffer).to_string()).unwrap();
     let session_id = get_session_id(&buffer);
+    let value = verify_session(session_id, db_pool.clone()).await;
+    if value.is_none() {
+        let status = "Session required for WebSocket.";
+        let len = status.as_bytes().len();
+        let response = format!("HTTP/1.1 401 Unauthorized\r\nUpgrade: websocket\r\nConnect-Type: text/plain\r\nContent-Length: {}\r\n{}\r\n\r\n", len, status);
+        let _ = stream.write_all(response.as_bytes()).await;
+        let _ = stream.flush().await;
+        println!("Unauthorized websocket request, shut it");
+        return;
+    }
+    let (username, color) = value.unwrap();
+    println!("Connected as {}", username);
     let combined = ws_key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
     let sha1_hashed = Sha1::digest(combined.as_bytes());
     let result = general_purpose::STANDARD.encode(sha1_hashed);
