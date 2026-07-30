@@ -112,7 +112,7 @@ async function sendAuthRequest(type) {
       document.getElementById("chat").style.display = "flex";
       document.getElementById("auth").style.display = "none";
     
-      // window.shouldReconnect = true;
+      window.shouldReconnect = true;
       await uploadHistory();
       connectWebSocket();
   }
@@ -236,10 +236,10 @@ async function uploadHistory() {
 
 function connectWebSocket() {
   console.log("Connecting to a WS");
-  // if (window.shouldReconnect === false) {
-  //   console.log("Reconnect disabled (logged out)");
-  //   return;
-  // }
+  if (window.shouldReconnect === false) {
+    console.log("Reconnect disabled (logged out)");
+    return;
+  }
   if (!STATE.username) {
     console.log("Not logged in, WS disabled");
     return;
@@ -250,6 +250,15 @@ function connectWebSocket() {
   ws.onopen = () => {
     setConnectedStatus(true);
     console.log("WebSocket connected");
+    (async () => {
+      const response = await fetch("/me")
+      const data = await response.json();
+      const [u, c] = data.message.split(":");
+      STATE.username = u;
+      STATE.color = c;
+    }
+
+    )
   };
 
   ws.onclose = () => {
@@ -298,9 +307,42 @@ function resetUI() {
   init();
 }
 
-// Let's go! Initialize the world.
-function init() {
+async function checkSession() {
+  try {
+    const response = await fetch("/me");
+    const data = await response.json();
 
+    if (data.status === "ok") {
+      const [username, color] = data.message.split(":");
+
+      STATE.username = username;
+      STATE.color = color;
+
+      window.shouldReconnect = true;
+
+      document.getElementById("chat").style.display = "flex";
+      document.getElementById("auth").style.display = "none";
+
+      await uploadHistory();
+      connectWebSocket();
+    } else {
+      window.shouldReconnect = false;   // ⭐ prevent reconnect spam
+    }
+  } catch (err) {
+    console.error("Session check failed:", err);
+    window.shouldReconnect = false;     // ⭐ also disable on error
+  }
+}
+
+// Let's go! Initialize the world.
+async function init() {
+  await checkSession();
+  
+  if (!STATE.username) {
+    document.getElementById("chat").style.display = "none";
+    document.getElementById("auth").style.display = "flex";
+    return;
+  }
   // Initialize some rooms.
   addRoom("lobby");
   addRoom("rocket");

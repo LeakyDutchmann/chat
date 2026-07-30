@@ -12,6 +12,7 @@ pub enum Route {
     Register(AuthForm),
     Login(AuthForm),
     Logout,
+    Me,
     Unexpected(String)
 }
 
@@ -29,6 +30,7 @@ static ROUTES: &[RouteEntry] = &[
     RouteEntry { path: b"GET /history HTTP/1.1", route: Route::History },
     RouteEntry { path: b"GET /ws HTTP/1.1", route: Route::WebSocket},
     RouteEntry { path: b"POST /logout HTTP/1.1", route: Route::Logout},
+    RouteEntry { path: b"GET /me HTTP/1.1", route: Route::Me},
 ];
 
 impl Route {

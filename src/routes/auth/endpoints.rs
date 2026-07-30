@@ -1,6 +1,6 @@
 use super::*;
 use crate::routes::auth::{form::{AuthForm, AuthResponse}, sessions::get_session_id};
-use sessions::{create_session, remove_session};
+use sessions::{create_session, remove_session, verify_session};
 use sqlx::Row;
 use argon2::{
     password_hash::{
@@ -92,4 +92,25 @@ pub async fn handle_logout(mut stream: TcpStream, db_pool: MySqlPool, buffer: &[
     let response = format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}", len, status_str);
     let _ = stream.write_all(response.as_bytes()).await;
     let _ = stream.flush().await;
+}
+
+pub async fn get_me(mut stream: TcpStream, db_pool: MySqlPool, buffer: &[u8]) {
+    let session_id = get_session_id(buffer);
+    if let Some((username, color)) = verify_session(session_id, db_pool).await {
+        let line = username + ":" + &color;
+        let status = AuthResponse::from("ok", &line.trim());
+        let status_str = serde_json::to_string(&status).unwrap();
+        let len = status_str.len();
+        let response = format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",len, status_str);
+        let _ = stream.write_all(response.as_bytes()).await;
+        let _ = stream.flush().await; 
+    } else {
+        let status = AuthResponse::from("error", "Session not found");
+        let status_str = serde_json::to_string(&status).unwrap();
+        let len = status_str.len();
+        let response = format!("HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",len, status_str);
+        let _ = stream.write_all(response.as_bytes()).await;
+        let _ = stream.flush().await;
+    }
+    
 }
