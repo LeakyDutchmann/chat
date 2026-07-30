@@ -75,3 +75,12 @@ pub async fn remove_session(session_id: String, db_pool: MySqlPool) {
         println!("Session not found: {}", &session_id);
     }
 }
+
+pub async fn cleanup_sessions(db_pool: &MySqlPool) {
+    let result = sqlx::query("DELETE FROM session")
+        .execute(db_pool)
+        .await.unwrap();
+    if result.rows_affected() > 0 {
+        println!("cleaned up {} session(s)", result.rows_affected());
+    }
+}

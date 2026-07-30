@@ -6,9 +6,11 @@ use sqlx::mysql::MySqlPool;
 use tokio::sync::broadcast::Sender;
 use history::fetch_history;
 use auth::endpoints::{handle_registration, handle_authentication, handle_logout, get_me};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 
-pub async fn handle_routes(stream: TcpStream, buffer: &[u8], sender: Sender<ChatMessage>, db_pool: MySqlPool) {
+pub async fn handle_routes(stream: TcpStream, buffer: &[u8], sender: Sender<ChatMessage>, db_pool: MySqlPool, shutdown: Sender<ShutDown>) {
     let route = routes::Route::from_buffer(&buffer);
     match route {
         Route::Init => {
@@ -66,7 +68,7 @@ pub async fn handle_routes(stream: TcpStream, buffer: &[u8], sender: Sender<Chat
             get_me(stream, db_pool, buffer).await;
         },
         Route::WebSocket => {
-            handle_websocket(stream, buffer, sender, db_pool).await;
+            handle_websocket(stream, buffer, sender, db_pool, shutdown).await;
         }
         Route::Unexpected(value) => {
             println!("Got unexpected route: {}", value);

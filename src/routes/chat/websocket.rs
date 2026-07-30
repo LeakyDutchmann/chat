@@ -12,8 +12,11 @@ use futures_util::{StreamExt, SinkExt};
 use tokio::sync::broadcast::Sender;
 use sqlx::mysql::MySqlPool;
 use serde_json::from_str;
+use tokio::signal;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
-pub async fn handle_websocket(mut stream: TcpStream, buffer: &[u8], sender: Sender<ChatMessage>, db_pool: MySqlPool) {
+pub async fn handle_websocket(mut stream: TcpStream, buffer: &[u8], sender: Sender<ChatMessage>, db_pool: MySqlPool, shutdown: Sender<ShutDown>) {
     let ws_key = get_ws_key(String::from_utf8_lossy(&buffer).to_string()).unwrap();
     let session_id = get_session_id(&buffer);
     let value = verify_session(session_id, db_pool.clone()).await;
@@ -27,7 +30,6 @@ pub async fn handle_websocket(mut stream: TcpStream, buffer: &[u8], sender: Send
         return;
     }
     let (username, color) = value.unwrap();
-    println!("Connected as {}", username);
     let combined = ws_key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
     let sha1_hashed = Sha1::digest(combined.as_bytes());
     let result = general_purpose::STANDARD.encode(sha1_hashed);
@@ -60,11 +62,22 @@ pub async fn handle_websocket(mut stream: TcpStream, buffer: &[u8], sender: Send
                 }
             }
             Ok(internal_msg) = rx.recv() => {
-                println!("Got bc msg");
                 let serialized = serde_json::to_string(&internal_msg).unwrap();
                 let msg = Message::text(serialized);
                 let _ = write.send(msg).await;
             }
+            Ok(_) = signal::ctrl_c() => {
+                println!("Shutting down...");
+                break;
+            }
         };
     }
+    let _ = write.send(Message::Close(None)).await;
+    println!("Stopping websocket loop...");
+    drop(write);
+    println!("dropping write ...");
+    drop(read);
+    println!("dropping read ...");
+    let _ = shutdown.send(ShutDown);
+    println!("Sent shutdown signal to main loop...");
 }
