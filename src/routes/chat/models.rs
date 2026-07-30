@@ -8,6 +8,12 @@ pub struct ChatMessage {
     pub message: String
 }
 
+#[derive(Deserialize)]
+pub struct RawChatMessage {
+    pub room: String,
+    pub message: String,
+}
+
 impl ChatMessage {
     pub fn from_form(form: String) -> Option<ChatMessage> {
         let parts: Vec<String> = form.split("&").map(|p| p.to_string()).collect();
@@ -32,6 +38,13 @@ impl ChatMessage {
             }
         }
         Some(parsed)
+    }
+    pub fn from_raw(raw: RawChatMessage, username: &str) -> ChatMessage {
+        ChatMessage {
+            room: raw.room,
+            username: username.to_string(),
+            message: raw.message,
+        }
     }
 }
 

@@ -26,12 +26,11 @@ newMessageForm.addEventListener("submit", (e) => {
 
   const room = STATE.room;
   const message = messageField.value;
-  const username = usernameField.value || "guest";
-
-  if (!message || !username) return;
+  
+  if (!message) return;
 
   if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
-      chatSocket.send(JSON.stringify({ room, username, message }));
+      chatSocket.send(JSON.stringify({ room, message }));
       messageField.value = "";
   }
 });

@@ -1,5 +1,5 @@
 use super::*;
-use crate::routes::{http::{get_ws_key}, chat::models::ChatMessage};
+use crate::routes::{http::{get_ws_key}, chat::models::{ChatMessage, RawChatMessage}};
 use crate::routes::db::save_to_db;
 use auth::sessions::{get_session_id, verify_session};
 use tokio::select;
@@ -45,13 +45,14 @@ pub async fn handle_websocket(mut stream: TcpStream, buffer: &[u8], sender: Send
                 match result {
                     Ok(msg) => {
                         let str = msg.to_text().unwrap();
-                        let message: ChatMessage = match from_str(str) {
+                        let raw: RawChatMessage = match from_str(str) {
                             Ok(v) => v,
                             Err(e) => {
                                 println!("failed to parse message: {}", e);
                                 continue;
                             }
                         };
+                        let message = ChatMessage::from_raw(raw, &username);
                         let _ = save_to_db(message.clone(), &db_pool).await;
                         let _ = sender.send(message);
                     }
