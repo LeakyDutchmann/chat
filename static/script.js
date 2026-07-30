@@ -10,6 +10,7 @@ let messageTemplate = document.getElementById('message');
 let messageField = newMessageForm.querySelector("#message");
 let usernameField = newMessageForm.querySelector("#username");
 let roomNameField = newRoomForm.querySelector("#name");
+let logoutBtn = document.getElementById("logout-btn");
 
 
 var STATE = {
@@ -48,6 +49,39 @@ newRoomForm.addEventListener("submit", (e) => {
 
   addMessage(room, "Rocket", `Look, your own "${room}" room! Nice.`, true);
 })
+
+logoutBtn.addEventListener("click", logout);
+
+async function logout() {
+  try {
+    const response = await fetch("/logout", { method: "POST" });
+    const data = await response.json();
+    console.log(data.message);
+
+    // Stop reconnect loop FIRST
+    window.shouldReconnect = false;
+    
+    // Then close WebSocket
+    if (window.chatSocket) {
+      window.chatSocket.close();
+      window.chatSocket = null;
+    }
+
+
+    // Clear user state
+    STATE.username = null;
+    STATE.color = null;
+
+    resetUI();
+
+    // Switch UI
+    document.getElementById("chat").style.display = "none";
+    document.getElementById("auth").style.display = "block";
+
+  } catch (err) {
+    console.error("Logout failed:", err);
+  }
+}
 
 async function sendAuthRequest(type) {
   const username = document.getElementById("auth-username").value;
@@ -238,6 +272,30 @@ function connectWebSocket() {
   };
 
   window.chatSocket = ws;
+}
+
+function resetUI() {
+  // Clear rooms
+  roomListDiv.innerHTML = "";
+  messagesDiv.innerHTML = "";
+
+  // Reset STATE
+  STATE = {
+    room: "lobby",
+    rooms: {},
+    connected: false,
+  };
+
+  // Clear auth status
+  authStatus.textContent = "";
+
+  // Clear auth fields
+  document.getElementById("auth-username").value = "";
+  document.getElementById("auth-password").value = "";
+  document.getElementById("auth-color").value = "";
+
+  // Reinitialize demo rooms/messages
+  init();
 }
 
 // Let's go! Initialize the world.

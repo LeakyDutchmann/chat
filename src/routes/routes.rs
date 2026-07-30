@@ -5,7 +5,7 @@ use route_models::Route;
 use sqlx::mysql::MySqlPool;
 use tokio::sync::broadcast::Sender;
 use history::fetch_history;
-use auth::endpoints::{handle_registration, handle_authentication};
+use auth::endpoints::{handle_registration, handle_authentication, handle_logout};
 
 
 pub async fn handle_routes(stream: TcpStream, buffer: &[u8], sender: Sender<ChatMessage>, db_pool: MySqlPool) {
@@ -55,6 +55,9 @@ pub async fn handle_routes(stream: TcpStream, buffer: &[u8], sender: Sender<Chat
         }
         Route::Login(form) => {
             handle_authentication(stream, db_pool, form).await;
+        }
+        Route::Logout => {
+            handle_logout(stream, db_pool, buffer).await;
         }
         Route::History => {
             fetch_history(stream, db_pool).await;

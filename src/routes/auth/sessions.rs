@@ -63,3 +63,15 @@ pub async fn verify_session(session_id: String, db_pool: MySqlPool) -> Option<(S
     println!("Session verified: {}", username);
     Some((username, color))
 }
+
+pub async fn remove_session(session_id: String, db_pool: MySqlPool) {
+    let result = sqlx::query("DELETE FROM session WHERE session_id =?")
+        .bind(&session_id)
+        .execute(&db_pool)
+        .await.unwrap();
+    if result.rows_affected() > 0 {
+        println!("Session removed: {}", &session_id);
+    } else {
+        println!("Session not found: {}", &session_id);
+    }
+}

@@ -11,6 +11,7 @@ pub enum Route {
     History,
     Register(AuthForm),
     Login(AuthForm),
+    Logout,
     Unexpected(String)
 }
 
@@ -27,6 +28,7 @@ static ROUTES: &[RouteEntry] = &[
     RouteEntry { path: b"GET /favicon.ico HTTP/1.1", route: Route::Icon },
     RouteEntry { path: b"GET /history HTTP/1.1", route: Route::History },
     RouteEntry { path: b"GET /ws HTTP/1.1", route: Route::WebSocket},
+    RouteEntry { path: b"POST /logout HTTP/1.1", route: Route::Logout},
 ];
 
 impl Route {

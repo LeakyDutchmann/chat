@@ -1,6 +1,6 @@
 use super::*;
-use crate::routes::auth::form::{AuthResponse, AuthForm};
-use sessions::create_session;
+use crate::routes::auth::{form::{AuthForm, AuthResponse}, sessions::get_session_id};
+use sessions::{create_session, remove_session};
 use sqlx::Row;
 use argon2::{
     password_hash::{
@@ -81,4 +81,15 @@ pub async fn handle_authentication(mut stream: TcpStream, db_pool: MySqlPool, fo
         }
         
     }
+}
+
+pub async fn handle_logout(mut stream: TcpStream, db_pool: MySqlPool, buffer: &[u8]) {
+    let session_id = get_session_id(buffer);
+    remove_session(session_id, db_pool).await;
+    let status = AuthResponse::from("Ok", "Session deleted succesfully");
+    let status_str = serde_json::to_string(&status).unwrap();
+    let len = status_str.len();
+    let response = format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}", len, status_str);
+    let _ = stream.write_all(response.as_bytes()).await;
+    let _ = stream.flush().await;
 }
