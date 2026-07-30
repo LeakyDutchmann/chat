@@ -341,6 +341,7 @@ async function init() {
   if (!STATE.username) {
     document.getElementById("chat").style.display = "none";
     document.getElementById("auth").style.display = "flex";
+    document.getElementById("auth").style.flexDirection = "column";
     return;
   }
   // Initialize some rooms.
