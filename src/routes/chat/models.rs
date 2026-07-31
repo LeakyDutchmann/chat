@@ -26,9 +26,6 @@ impl ChatMessage {
             if let Some((a, b)) = part.split_once("=") {
                 let mut decoded = decode(b.trim()).ok()?.to_string();
                 decoded = decoded.replace("+", " ");
-                if decoded.contains('+') {
-                    println!("invalid character: {}", decoded);
-                }
                 match a {
                     "room" => parsed.room = decoded,
                     "username" => parsed.username = decoded,

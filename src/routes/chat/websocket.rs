@@ -1,5 +1,5 @@
 use super::*;
-use crate::routes::{http::{get_ws_key}, chat::models::{ChatMessage, RawChatMessage}};
+use crate::routes::{http_utils::{get_ws_key}, chat::models::{ChatMessage, RawChatMessage}};
 use crate::routes::db::save_to_db;
 use auth::sessions::{get_session_id, verify_session};
 use tokio::select;
@@ -13,20 +13,21 @@ use tokio::sync::broadcast::Sender;
 use sqlx::mysql::MySqlPool;
 use serde_json::from_str;
 use tokio::signal;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use crate::routes::http_utils::send_json;
+use crate::routes::auth::form::AuthResponse;
 
 pub async fn handle_websocket(mut stream: TcpStream, buffer: &[u8], sender: Sender<ChatMessage>, db_pool: MySqlPool, shutdown: Sender<ShutDown>) {
     let ws_key = get_ws_key(String::from_utf8_lossy(&buffer).to_string()).unwrap();
     let session_id = get_session_id(&buffer);
     let value = verify_session(session_id, db_pool.clone()).await;
     if value.is_none() {
-        let status = "Session required for WebSocket.";
-        let len = status.as_bytes().len();
-        let response = format!("HTTP/1.1 401 Unauthorized\r\nUpgrade: websocket\r\nConnect-Type: text/plain\r\nContent-Length: {}\r\n{}\r\n\r\n", len, status);
-        let _ = stream.write_all(response.as_bytes()).await;
-        let _ = stream.flush().await;
-        println!("Unauthorized websocket request, shut it");
+        send_json(
+            AuthResponse::from_err("Session is required to start a websocket connection"),
+            "404",
+            "Unauthorized",
+            None,
+            stream,
+        ).await;
         return;
     }
     let (username, color) = value.unwrap();
@@ -48,7 +49,7 @@ pub async fn handle_websocket(mut stream: TcpStream, buffer: &[u8], sender: Send
                         let raw: RawChatMessage = match from_str(str) {
                             Ok(v) => v,
                             Err(e) => {
-                                println!("failed to parse message: {}", e);
+                                log(&format!("failed to parse message: {}", e), "red", false);
                                 continue;
                             }
                         };
@@ -57,7 +58,7 @@ pub async fn handle_websocket(mut stream: TcpStream, buffer: &[u8], sender: Send
                         let _ = sender.send(message);
                     }
                     Err(e) => {
-                        println!("connection error: {}", e);
+                        log(&format!("connection error: {}", e), "red", false);
                         break;
                     }
                 }
@@ -68,17 +69,16 @@ pub async fn handle_websocket(mut stream: TcpStream, buffer: &[u8], sender: Send
                 let _ = write.send(msg).await;
             }
             Ok(_) = signal::ctrl_c() => {
-                println!("Shutting down...");
+                log("Shutting down...", "green", false);
                 break;
             }
         };
     }
     let _ = write.send(Message::Close(None)).await;
-    println!("Stopping websocket loop...");
+    log("Stopped websocket loop", "green", false);
     drop(write);
-    println!("dropping write ...");
     drop(read);
-    println!("dropping read ...");
+    log("dropped channel", "green", false);
     let _ = shutdown.send(ShutDown);
-    println!("Sent shutdown signal to main loop...");
+    log("Sent shutdown signal to main loop", "green", false);
 }

@@ -1,5 +1,5 @@
 use super::*;
-use crate::routes::auth::{form::{AuthForm, AuthResponse}, sessions::get_session_id};
+use crate::routes::{auth::{form::{AuthForm, AuthResponse}, sessions::get_session_id}, http_utils::send_json};
 use sessions::{create_session, remove_session, verify_session};
 use sqlx::Row;
 use argon2::{
@@ -19,12 +19,13 @@ pub fn hash_password(password: &str) -> Option<String> {
 
 pub async fn handle_registration(mut stream: TcpStream, db_pool: MySqlPool, form: AuthForm) {
     if form.username.is_empty() || form.password.is_empty() {
-        let status = AuthResponse::from("error", "Empty field passed");
-        let status_str = serde_json::to_string(&status).unwrap();
-        let len = status_str.len();
-        let pesponse = format!("HTTP/1.1 400 BAD REQUEST\r\nContent-Type: application/json\r\nContent-length: {}\r\n\r\n{}", len, status_str);
-        let _ = stream.write_all(pesponse.as_bytes()).await;
-        let _ = stream.flush().await;
+        send_json(
+            AuthResponse::from_err("Empry field passed into form"),
+            "400",
+            "BAD REQUEST",
+            None,
+            stream
+        ).await;
         return;
     }
     let result = sqlx::query("SELECT username FROM users WHERE username = ?")
@@ -32,11 +33,13 @@ pub async fn handle_registration(mut stream: TcpStream, db_pool: MySqlPool, form
         .fetch_one(&db_pool)
         .await.ok();
     if result.is_some() {
-        let status = AuthResponse::from("error", "Error, user already exists");
-        let json = serde_json::to_string(&status).unwrap();
-        let len = json.len();
-        let response = format!("HTTP/1.1 400 BAD REQUEST\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}", len, json);
-        let _ = stream.write_all(response.as_bytes()).await;
+        send_json(
+            AuthResponse::from_err("Error, user already exists"),
+            "400",
+            "BAD REQUEST",
+            None,
+            stream,
+        ).await;
         return;
     }
     let password_hash = hash_password(&form.password).expect("called unwrap on None password");
@@ -48,22 +51,25 @@ pub async fn handle_registration(mut stream: TcpStream, db_pool: MySqlPool, form
         .await;
     match result {
         Ok(_) => {
-            let status = AuthResponse::from("ok", "User is succesfully registered");
-            let json = serde_json::to_string(&status).unwrap();
-            let len = json.len();
             let cookie = create_session(db_pool, form.username).await;
-            let response = format!("HTTP/1.1 200 OK\r\nSet-Cookie: {}\r\nContent-Type: application/json\r\nContent-length: {}\r\n\r\n{}", cookie, len, json);
-            let _ = stream.write_all(response.as_bytes()).await;
-            let _ = stream.flush().await;
+            let cookie_header = format!("Set-Cookie: {}", cookie);
+            send_json(
+                AuthResponse::from_ok("User is succesfully registered"),
+                "200",
+                "OK",
+                Some(&cookie_header),
+                stream,
+            ).await;
         }
         Err(e) => {
-            println!("Error: {}", e);
-            let status = AuthResponse::from("error", "Internal server error");
-            let json = serde_json::to_string(&status).unwrap();
-            let len = json.len();
-            let response = format!("HTTP/1.1 500 INTERNAL SERVER ERROR\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}", len, json);
-            let _ = stream.write_all(response.as_bytes()).await;
-            let _ = stream.flush().await;
+            log(&format!("Error: {}", e), "red", false);
+            send_json(
+                AuthResponse::from_err("Internal server error"),
+                "500",
+                "INTERNAL SERVER ERROR",
+                None,
+                stream
+            ).await;
         }
     }
 }
@@ -71,12 +77,13 @@ pub async fn handle_registration(mut stream: TcpStream, db_pool: MySqlPool, form
 
 pub async fn handle_authentication(mut stream: TcpStream, db_pool: MySqlPool, form: AuthForm) {
     if form.username.is_empty() || form.password.is_empty() {
-        let status = AuthResponse::from("error", "Empty field passed");
-        let status_str = serde_json::to_string(&status).unwrap();
-        let len = status_str.len();
-        let pesponse = format!("HTTP/1.1 400 BAD REQUEST\r\nContent-Type: application/json\r\nContent-length: {}\r\n\r\n{}", len, status_str);
-        let _ = stream.write_all(pesponse.as_bytes()).await;
-        let _ = stream.flush().await;
+        send_json(
+            AuthResponse::from_err("Empry field passed into form"),
+            "400",
+            "BAD REQUEST",
+            None,
+            stream
+        ).await;
         return;
     }
     let result = sqlx::query("SELECT password_hash, color FROM users WHERE username =?")
@@ -84,74 +91,113 @@ pub async fn handle_authentication(mut stream: TcpStream, db_pool: MySqlPool, fo
         .fetch_optional(&db_pool)
         .await;
     if result.is_err() {
-        let status = AuthResponse::from("error", "Internal server error");
-        let status_str = serde_json::to_string(&status).unwrap();
-        let len = status_str.len();
-        let response = format!("HTTP/1.1 500 INTERNAL SERVER ERROR\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}", len, status_str);
-        let _ = stream.write_all(response.as_bytes()).await;
-        let _ = stream.flush().await;
+        send_json(
+            AuthResponse::from_err("Internal server error"),
+            "500",
+            "INTERNAL SERVER ERROR",
+            None,
+            stream
+        ).await;
         return;
     }
     let row_opt = result.unwrap();
     if row_opt.is_none() {
-        let status = AuthResponse::from("error", "User does not exist");
-        let status_str = serde_json::to_string(&status).unwrap();
-        let len = status_str.len();
-        let response = format!("HTTP/1.1 400 BAD REQUEST\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}", len, status_str);
-        let _ = stream.write_all(response.as_bytes()).await;
-        let _ = stream.flush().await;
+        send_json(
+            AuthResponse::from_err("User does not exist"),
+            "400",
+            "BAD REQUEST",
+            None,
+            stream
+        ).await;
     } else {
         let password_hash: String = row_opt.unwrap().try_get("password_hash").unwrap();
         let parsed_hash = PasswordHash::new(&password_hash).unwrap();
         let argon2 = Argon2::default();
-        if argon2.verify_password(form.password.as_bytes(), &parsed_hash).is_ok() {
-            let status = AuthResponse::from("succesfully logged in", "Succesfully logged in");
-            let status_str = serde_json::to_string(&status).unwrap();
-            let len = status_str.len();
+        if argon2.verify_password(form.password.as_bytes(), &parsed_hash).is_ok() {         
             let cookie = create_session(db_pool, form.username).await;
-            let response = format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nSet-Cookie: {}\r\n\r\n{}", len, cookie, status_str);
-            let _ = stream.write_all(response.as_bytes()).await;
-            let _ = stream.flush().await;
+            let cookie_header = format!("Set-Cookie: {}", cookie);
+            send_json(
+                AuthResponse::from_ok("Succesfully logged in"),
+                "200",
+                "OK",
+                Some(&cookie_header),
+                stream,
+            ).await;
         } else {
-            let status = AuthResponse::from("error", "Wrong password");
-            let status_str = serde_json::to_string(&status).unwrap();
-            let len = status_str.len();
-            let response = format!("HTTP/1.1 400 BAD REQUEST\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}", len, status_str);
-            let _ = stream.write_all(response.as_bytes()).await;
-            let _ = stream.flush().await;
+            send_json(
+                AuthResponse::from_err("Incorrect password"),
+                "400",
+                "BAD REQUEST",
+                None,
+                stream
+            ).await;
         }
         
     }
 }
 
-pub async fn handle_logout(mut stream: TcpStream, db_pool: MySqlPool, buffer: &[u8]) {
+pub async fn handle_logout(stream: TcpStream, db_pool: MySqlPool, buffer: &[u8]) {
     let session_id = get_session_id(buffer);
-    remove_session(session_id, db_pool).await;
-    let status = AuthResponse::from("Ok", "Session deleted succesfully");
-    let status_str = serde_json::to_string(&status).unwrap();
-    let len = status_str.len();
-    let response = format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}", len, status_str);
-    let _ = stream.write_all(response.as_bytes()).await;
-    let _ = stream.flush().await;
+    if session_id.is_empty() {
+        send_json(
+            AuthResponse::from_err("Session ID is empty"),
+            "400",
+            "BAD REQUEST",
+            None,
+            stream,
+        ).await;
+        return;
+    }
+    let result = remove_session(session_id, db_pool).await;
+    if result.is_err() {
+        send_json(
+            AuthResponse::from_err("Internal server error"),
+            "500",
+            "INTERNAL SERVER ERROR",
+            None,
+            stream,
+        ).await;
+        return;
+    } else {
+        send_json(
+            AuthResponse::from_ok("Session is finished succesfully"),
+            "200",
+            "OK",
+            None,
+            stream
+        ).await;
+    }
 }
 
-pub async fn get_me(mut stream: TcpStream, db_pool: MySqlPool, buffer: &[u8]) {
+pub async fn get_me(stream: TcpStream, db_pool: MySqlPool, buffer: &[u8]) {
     let session_id = get_session_id(buffer);
+    if session_id.is_empty() {
+        send_json(
+            AuthResponse::from_err("Session ID is empty"),
+            "400",
+            "BAD REQUEST",
+            None,
+            stream,
+        ).await;
+        return;
+    }
     if let Some((username, color)) = verify_session(session_id, db_pool).await {
         let line = username + ":" + &color;
-        let status = AuthResponse::from("ok", &line.trim());
-        let status_str = serde_json::to_string(&status).unwrap();
-        let len = status_str.len();
-        let response = format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",len, status_str);
-        let _ = stream.write_all(response.as_bytes()).await;
-        let _ = stream.flush().await; 
+        send_json(
+            AuthResponse::from_ok(&line.trim()),
+            "200",
+            "OK",
+            None,
+            stream
+        ).await;
     } else {
-        let status = AuthResponse::from("error", "Session not found");
-        let status_str = serde_json::to_string(&status).unwrap();
-        let len = status_str.len();
-        let response = format!("HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",len, status_str);
-        let _ = stream.write_all(response.as_bytes()).await;
-        let _ = stream.flush().await;
+        send_json(
+            AuthResponse::from_err("Session is not found"),
+            "404",
+            "NOT FOUND",
+            None,
+            stream,
+        ).await;
     }
     
 }

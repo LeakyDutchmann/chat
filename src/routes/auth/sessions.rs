@@ -4,7 +4,6 @@ use sha1::{Sha1, Digest};
 use rand::RngCore;
 use super::*;
 
-//returng cookie as a string, so I save space in caller function
 pub async fn create_session(db_pool: MySqlPool, username: String) -> String {
     let session_id = create_session_id(&username).await;
     let _ = sqlx::query("INSERT INTO session(username, session_id) values(?, ?)")
@@ -12,7 +11,6 @@ pub async fn create_session(db_pool: MySqlPool, username: String) -> String {
         .bind(session_id.clone())
         .execute(&db_pool)
         .await.unwrap();
-    println!("Session created: {}", session_id);
     let cookie = Cookie::build(("session", session_id))
         .path("/")
         .http_only(true)
@@ -53,7 +51,6 @@ pub fn get_session_id(buffer: &[u8]) -> String {
 
 
 pub async fn verify_session(session_id: String, db_pool: MySqlPool) -> Option<(String, String)> {
-    println!("Verifying session: {}", session_id);
     let row = sqlx::query("SELECT username, color FROM users WHERE username = (SELECT username FROM session WHERE session_id = ?)")
         .bind(session_id)
         .fetch_optional(&db_pool)
@@ -64,19 +61,18 @@ pub async fn verify_session(session_id: String, db_pool: MySqlPool) -> Option<(S
     let row = row.unwrap();
     let username: String = row.try_get("username").ok()?;
     let color: String = row.try_get("color").ok()?;
-    println!("Session verified: {}", username);
     Some((username, color))
 }
 
-pub async fn remove_session(session_id: String, db_pool: MySqlPool) {
+pub async fn remove_session(session_id: String, db_pool: MySqlPool) -> Result<u64, sqlx::Error> {
     let result = sqlx::query("DELETE FROM session WHERE session_id =?")
         .bind(&session_id)
         .execute(&db_pool)
         .await.unwrap();
     if result.rows_affected() > 0 {
-        println!("Session removed: {}", &session_id);
+        Ok(result.rows_affected())
     } else {
-        println!("Session not found: {}", &session_id);
+        Err(sqlx::Error::RowNotFound)
     }
 }
 
@@ -85,6 +81,6 @@ pub async fn cleanup_sessions(db_pool: &MySqlPool) {
         .execute(db_pool)
         .await.unwrap();
     if result.rows_affected() > 0 {
-        println!("cleaned up {} session(s)", result.rows_affected());
+        log(format!("cleaned up {} session(s)", result.rows_affected()).as_str(), "blue", false);
     }
 }

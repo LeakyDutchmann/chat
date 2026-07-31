@@ -1,4 +1,4 @@
-use crate::routes::http::{parse_request_body};
+use crate::routes::http_utils::{parse_request_body};
 use super::*;
 
 #[derive(Clone, Debug, Serialize)]
@@ -8,9 +8,15 @@ pub struct AuthResponse {
 }
 
 impl AuthResponse {
-    pub fn from(status: &str, message: &str) -> AuthResponse {
+    pub fn from_ok(message: &str) -> AuthResponse {
         AuthResponse {
-            status: status.to_string(),
+            status: "ok".to_string(),
+            message: message.to_string(),
+        }
+    }
+    pub fn from_err(message: &str) -> AuthResponse {
+        AuthResponse {
+            status: "error".to_string(),
             message: message.to_string(),
         }
     }

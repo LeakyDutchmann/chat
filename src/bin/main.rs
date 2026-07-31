@@ -3,7 +3,7 @@ use chat::routes::chat::models::ChatMessage;
 use chat::routes::db::estabilish_connection;
 use chat::routes::auth::sessions::cleanup_sessions;
 use chat::ShutDown;
-use colored::Colorize;
+use chat::log;
 
 
 use std::io::ErrorKind::UnexpectedEof;
@@ -31,7 +31,7 @@ async fn main() -> io::Result<()> {
     let (tx, _rx) = tokio::sync::broadcast::channel::<ChatMessage>(1024);
     let db_url = "mysql://root:Tima1405pereviz@localhost:3306/chat_db";
     let db_pool = estabilish_connection(db_url).await.unwrap();
-    println!("Listening on 127.0.0.1:8080");
+    log("Listening on 127.0.0.1:8080", "blue", true);
     loop {
         let shutdown_tx = shutdown_tx.clone();
         let pool = db_pool.clone();
@@ -39,21 +39,22 @@ async fn main() -> io::Result<()> {
             Ok(result) = listener.accept() => {
                 let (mut stream, addr) = result;
                 let tx_cloned = tx.clone();
-
-                println!("Accepted connection from {}", addr);
+                
+                let line = format!("Accepted connection from {}", addr);
+                log(&line, "blue", false);
                 
                 tokio::spawn(async move {
                     let mut buffer = [0u8; 4096];
                     let n = match stream.read(&mut buffer).await {
                         Ok(0) => {
-                            println!("Connection with: {} is lost", addr);
+                            log(format!("Connection with: {} is lost", addr).as_str(), "red", false);
                             return;
                         }
                         Ok(n) => {
                             n
                         },
                         Err(e) => {
-                            println!("Error reading a buffer: {}", e);
+                            log(format!("Error reading a buffer: {}", e).as_str(), "red", false);
                             return;
                         }
                     };
@@ -61,12 +62,12 @@ async fn main() -> io::Result<()> {
                 });
             }
             Ok(_) = shutdown_rx.recv() => {
-                println!("Stopping main loop...");
+                log("Stopping main loop...", "green", false);
                 break;
             }
         };
     }
     cleanup_sessions(&db_pool).await;
-    println!("Graceful shutdown completed");
+    log("Graceful shutdown completed", "green", false);
     Ok(())
 }
