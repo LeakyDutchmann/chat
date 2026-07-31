@@ -66,7 +66,6 @@ async function logout() {
       window.chatSocket = null;
     }
 
-
     // Clear user state
     STATE.username = null;
     STATE.color = null;
@@ -335,6 +334,9 @@ async function checkSession() {
 
 // Let's go! Initialize the world.
 async function init() {
+  if (shouldReconnect != true) {
+    return;
+  }
   await checkSession();
   
   if (!STATE.username) {

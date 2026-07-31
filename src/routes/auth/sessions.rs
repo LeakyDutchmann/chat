@@ -57,7 +57,11 @@ pub async fn verify_session(session_id: String, db_pool: MySqlPool) -> Option<(S
     let row = sqlx::query("SELECT username, color FROM users WHERE username = (SELECT username FROM session WHERE session_id = ?)")
         .bind(session_id)
         .fetch_optional(&db_pool)
-        .await.unwrap().unwrap();
+        .await.unwrap();
+    if row.is_none() {
+        return None;
+    }
+    let row = row.unwrap();
     let username: String = row.try_get("username").ok()?;
     let color: String = row.try_get("color").ok()?;
     println!("Session verified: {}", username);
