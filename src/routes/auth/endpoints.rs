@@ -18,6 +18,15 @@ pub fn hash_password(password: &str) -> Option<String> {
 }
 
 pub async fn handle_registration(mut stream: TcpStream, db_pool: MySqlPool, form: AuthForm) {
+    if form.username.is_empty() || form.password.is_empty() {
+        let status = AuthResponse::from("error", "Empty field passed");
+        let status_str = serde_json::to_string(&status).unwrap();
+        let len = status_str.len();
+        let pesponse = format!("HTTP/1.1 400 Bad request\r\nContent-Type: application/json\r\nContent-length: {}\r\n\r\n{}", len, status_str);
+        let _ = stream.write_all(pesponse.as_bytes()).await;
+        let _ = stream.flush().await;
+        return;
+    }
     let result = sqlx::query("SELECT username FROM users WHERE username = ?")
         .bind(&form.username)
         .fetch_one(&db_pool)
@@ -26,7 +35,7 @@ pub async fn handle_registration(mut stream: TcpStream, db_pool: MySqlPool, form
         let status = AuthResponse::from("error, user already exists", "Error, user already exists");
         let json = serde_json::to_string(&status).unwrap();
         let len = json.len();
-        let response = format!("HTTP/1.1 OK 200\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}", len, json);
+        let response = format!("HTTP/1.1 400 Bad request\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}", len, json);
         let _ = stream.write_all(response.as_bytes()).await;
         return;
     }
@@ -43,12 +52,18 @@ pub async fn handle_registration(mut stream: TcpStream, db_pool: MySqlPool, form
             let json = serde_json::to_string(&status).unwrap();
             let len = json.len();
             let cookie = create_session(db_pool, form.username).await;
-            let response = format!("HTTP/1.1 Ok 200\r\nSet-Cookie: {}\r\nContent-Type: application/json\r\nContent-length: {}\r\n\r\n{}", cookie, len, json);
+            let response = format!("HTTP/1.1 200 ok\r\nSet-Cookie: {}\r\nContent-Type: application/json\r\nContent-length: {}\r\n\r\n{}", cookie, len, json);
             let _ = stream.write_all(response.as_bytes()).await;
             let _ = stream.flush().await;
         }
         Err(e) => {
             println!("Error: {}", e);
+            let status = AuthResponse::from("error", "Internal server error");
+            let json = serde_json::to_string(&status).unwrap();
+            let len = json.len();
+            let response = format!("HTTP/1.1 400 Bad request\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}", len, json);
+            let _ = stream.write_all(response.as_bytes()).await;
+            let _ = stream.flush().await;
         }
     }
 }
