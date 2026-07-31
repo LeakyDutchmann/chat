@@ -5,32 +5,21 @@ use chat::routes::auth::sessions::cleanup_sessions;
 use chat::ShutDown;
 use chat::log;
 
-
-use std::io::ErrorKind::UnexpectedEof;
-use tokio::net::{TcpListener, TcpStream};
-use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
-use tokio::sync::broadcast::Sender;
-use sqlx::{self, mysql::{MySqlPoolOptions, MySqlPool}};
-use tokio::signal;
+use tokio::net::{TcpListener};
+use tokio::io::{self, AsyncReadExt};
 use tokio::select;
-use std::sync::{atomic::{AtomicBool, Ordering}, Arc};
-
-pub async fn shut_down() -> bool {
-    let result = signal::ctrl_c().await;
-    if result.is_ok() {
-        return true;
-    }
-    false
-}
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
     let listener = TcpListener::bind("127.0.0.1:8080").await?;
+    
     let (shutdown_tx, _) = tokio::sync::broadcast::channel::<ShutDown>(1024);
     let mut shutdown_rx = shutdown_tx.subscribe();
     let (tx, _rx) = tokio::sync::broadcast::channel::<ChatMessage>(1024);
+    
     let db_url = "mysql://root:Tima1405pereviz@localhost:3306/chat_db";
     let db_pool = estabilish_connection(db_url).await.unwrap();
+    
     log("Listening on 127.0.0.1:8080", "blue", true);
     loop {
         let shutdown_tx = shutdown_tx.clone();

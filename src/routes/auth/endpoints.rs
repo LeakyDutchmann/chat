@@ -17,7 +17,7 @@ pub fn hash_password(password: &str) -> Option<String> {
     Some(password_hash)
 }
 
-pub async fn handle_registration(mut stream: TcpStream, db_pool: MySqlPool, form: AuthForm) {
+pub async fn handle_registration(stream: TcpStream, db_pool: MySqlPool, form: AuthForm) {
     if form.username.is_empty() || form.password.is_empty() {
         send_json(
             AuthResponse::from_err("Empry field passed into form"),
@@ -75,7 +75,7 @@ pub async fn handle_registration(mut stream: TcpStream, db_pool: MySqlPool, form
 }
 
 
-pub async fn handle_authentication(mut stream: TcpStream, db_pool: MySqlPool, form: AuthForm) {
+pub async fn handle_authentication(stream: TcpStream, db_pool: MySqlPool, form: AuthForm) {
     if form.username.is_empty() || form.password.is_empty() {
         send_json(
             AuthResponse::from_err("Empry field passed into form"),

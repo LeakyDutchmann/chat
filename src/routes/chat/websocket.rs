@@ -30,7 +30,7 @@ pub async fn handle_websocket(mut stream: TcpStream, buffer: &[u8], sender: Send
         ).await;
         return;
     }
-    let (username, color) = value.unwrap();
+    let (username, _) = value.unwrap();
     let combined = ws_key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
     let sha1_hashed = Sha1::digest(combined.as_bytes());
     let result = general_purpose::STANDARD.encode(sha1_hashed);
