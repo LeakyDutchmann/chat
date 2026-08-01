@@ -8,17 +8,13 @@ let roomTemplate = document.getElementById('room');
 let messageTemplate = document.getElementById('message');
 
 let messageField = newMessageForm.querySelector("#message");
-let usernameField = newMessageForm.querySelector("#username");
 let roomNameField = newRoomForm.querySelector("#name");
 let logoutBtn = document.getElementById("logout-btn");
 
 var STATE = {
   room: "lobby",
-  rooms: {},
   connected: false,
 }
-
-window.shouldReconnect = false;
 
 // Set up the form handler.
 newMessageForm.addEventListener("submit", (e) => {
@@ -58,6 +54,7 @@ async function logout() {
 
     // Stop reconnect loop FIRST
     window.shouldReconnect = false;
+    localStorage.removeItem("wasLoggedIn");  
     
     // Then close WebSocket
     if (window.chatSocket) {
@@ -106,9 +103,11 @@ async function sendAuthRequest(type) {
       document.getElementById("chat").style.display = "flex";
       document.getElementById("auth").style.display = "none";
     
-      window.shouldReconnect = true;
-      await uploadHistory();
-      connectWebSocket();
+    window.shouldReconnect = true;
+    localStorage.setItem("wasLoggedIn", "true"); 
+    
+    await uploadHistory();
+    connectWebSocket();
   }
 }
 
@@ -269,7 +268,10 @@ function connectWebSocket() {
     const msg = JSON.parse(event.data);
   
     if (!msg.room || !msg.username || !msg.message) return;
-  
+    
+    if (!STATE[msg.room]) {
+        addRoom(msg.room);
+    }
     addMessage(msg.room, msg.username, msg.message, true);
   };
 
@@ -284,7 +286,6 @@ function resetUI() {
   // Reset STATE
   STATE = {
     room: "lobby",
-    rooms: {},
     connected: false,
   };
 
@@ -294,9 +295,6 @@ function resetUI() {
   // Clear auth fields
   document.getElementById("auth-username").value = "";
   document.getElementById("auth-password").value = "";
-
-  // Reinitialize demo rooms/messages
-  init();
 }
 
 async function checkSession() {
@@ -327,11 +325,11 @@ async function checkSession() {
 
 // Let's go! Initialize the world.
 async function init() {
-  if (shouldReconnect != true) {
-    return;
+  const wasLoggedIn = localStorage.getItem("wasLoggedIn") === "true";
+ 
+  if (wasLoggedIn) {
+    await checkSession();   // ⭐ only on refresh after login
   }
-  
-  await checkSession();
   
   if (!STATE.username) {
     document.getElementById("chat").style.display = "none";
