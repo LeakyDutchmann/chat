@@ -1,8 +1,9 @@
+use super::log;
+
 use cookie::{Cookie, SameSite};
-use sqlx::Row;
 use sha1::{Sha1, Digest};
 use rand::RngCore;
-use super::*;
+use sqlx::{self, mysql::MySqlPool, Row};
 
 pub async fn create_session(db_pool: MySqlPool, username: String) -> String {
     let session_id = create_session_id(&username).await;
@@ -25,7 +26,6 @@ pub async fn create_session_id(username: &str) -> String {
     rand::thread_rng().fill_bytes(&mut bytes);
     hasher.update(username.as_bytes());
     hasher.update(&bytes);
-
     let result = hasher.finalize();
     hex::encode(result)
 }

@@ -1,5 +1,6 @@
-use super::*;
 use sqlx::{mysql::MySqlRow, FromRow, Row};
+use serde::{Serialize, Deserialize};
+
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
@@ -24,7 +25,7 @@ impl ChatMessage {
         };
         for part in parts {
             if let Some((a, b)) = part.split_once("=") {
-                let mut decoded = decode(b.trim()).ok()?.to_string();
+                let mut decoded = urlencoding::decode(b.trim()).ok()?.to_string();
                 decoded = decoded.replace("+", " ");
                 match a {
                     "room" => parsed.room = decoded,

@@ -1,6 +1,7 @@
-use super::*;
 use super::chat::models::ChatMessage;
 use sqlx::mysql::MySqlPool;
+use tokio::net::TcpStream;
+use tokio::io::AsyncWriteExt;
 
 pub async fn fetch_history(mut stream: TcpStream, db_pool: MySqlPool) {
     let rows_opt: Option<Vec<ChatMessage>> = sqlx::query_as("SELECT * FROM messages")

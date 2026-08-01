@@ -1,6 +1,10 @@
 use super::*;
-use crate::routes::{auth::{form::{AuthForm, AuthResponse}, sessions::get_session_id}, http_utils::send_json};
-use sessions::{create_session, remove_session, verify_session};
+use form::{AuthForm, AuthResponse};
+use crate::session_utils::{create_session, remove_session, verify_session, get_session_id};
+use crate::http_utils::send_json;
+use crate::log;
+
+use sqlx::mysql::MySqlPool;
 use sqlx::Row;
 use argon2::{
     password_hash::{
@@ -9,6 +13,7 @@ use argon2::{
     Argon2,
 };
 use rand_core::OsRng;
+use tokio::net::TcpStream;
 
 pub fn hash_password(password: &str) -> Option<String> {
     let salt = SaltString::generate(&mut OsRng);
@@ -73,7 +78,6 @@ pub async fn handle_registration(stream: TcpStream, db_pool: MySqlPool, form: Au
         }
     }
 }
-
 
 pub async fn handle_authentication(stream: TcpStream, db_pool: MySqlPool, form: AuthForm) {
     if form.username.is_empty() || form.password.is_empty() {

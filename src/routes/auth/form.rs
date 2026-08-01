@@ -1,5 +1,5 @@
-use crate::routes::http_utils::{parse_request_body};
-use super::*;
+use crate::http_utils::{parse_request_body};
+use serde::Serialize;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct AuthResponse {
@@ -41,7 +41,7 @@ impl AuthForm {
         let parts: Vec<&str> = body.split('&').collect();
         for part in parts {
             let (a, b) = part.split_once("=").unwrap();
-            let decoded = decode(b.trim()).unwrap().replace("+", " ");
+            let decoded = urlencoding::decode(b.trim()).unwrap().replace("+", " ");
             match a {
                 "username" => {
                     form.username = decoded;

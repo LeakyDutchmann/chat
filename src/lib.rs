@@ -1,8 +1,13 @@
 pub mod routes;
+pub mod fileserver;
+pub mod http_utils;
+pub mod db;
+pub mod session_utils;
+
 use colored::Colorize;
 
 #[derive(Clone)]
-pub struct ShutDown;
+pub struct Shutdown;
 
 pub fn log(line: &str, color: &str, underline: bool) {
     let line = match color {

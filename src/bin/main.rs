@@ -1,8 +1,8 @@
 use chat::routes::routes;
 use chat::routes::chat::models::ChatMessage;
-use chat::routes::db::estabilish_connection;
-use chat::routes::auth::sessions::cleanup_sessions;
-use chat::ShutDown;
+use chat::db::estabilish_connection;
+use chat::session_utils::cleanup_sessions;
+use chat::Shutdown;
 use chat::log;
 
 use tokio::net::{TcpListener};
@@ -12,14 +12,11 @@ use tokio::select;
 #[tokio::main]
 async fn main() -> io::Result<()> {
     let listener = TcpListener::bind("127.0.0.1:8080").await?;
-    
-    let (shutdown_tx, _) = tokio::sync::broadcast::channel::<ShutDown>(1024);
+    let (shutdown_tx, _) = tokio::sync::broadcast::channel::<Shutdown>(1024);
     let mut shutdown_rx = shutdown_tx.subscribe();
     let (tx, _rx) = tokio::sync::broadcast::channel::<ChatMessage>(1024);
-    
     let db_url = "mysql://root:Tima1405pereviz@localhost:3306/chat_db";
     let db_pool = estabilish_connection(db_url).await.unwrap();
-    
     log("Listening on 127.0.0.1:8080", "blue", true);
     loop {
         let shutdown_tx = shutdown_tx.clone();

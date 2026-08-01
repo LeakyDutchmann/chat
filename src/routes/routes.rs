@@ -1,15 +1,17 @@
 use crate::routes::chat::{websocket::handle_websocket, models::ChatMessage};
-use super::*;
-use fileserver::serve_file;
-use route_models::Route;
+use crate::routes::route_models;
+use super::history::fetch_history;
+use super::auth::endpoints::{handle_registration, handle_authentication, handle_logout, get_me};
+use crate::fileserver::serve_file;
+use super::route_models::Route;
+
 use sqlx::mysql::MySqlPool;
 use tokio::sync::broadcast::Sender;
-use history::fetch_history;
-use auth::endpoints::{handle_registration, handle_authentication, handle_logout, get_me};
+use tokio::net::TcpStream;
+use crate::Shutdown;
 
-
-pub async fn handle_routes(stream: TcpStream, buffer: &[u8], sender: Sender<ChatMessage>, db_pool: MySqlPool, shutdown: Sender<ShutDown>) {
-    let route = routes::Route::from_buffer(&buffer);
+pub async fn handle_routes(stream: TcpStream, buffer: &[u8], sender: Sender<ChatMessage>, db_pool: MySqlPool, shutdown: Sender<Shutdown>) {
+    let route = route_models::Route::from_buffer(&buffer);
     match route {
         Route::Init => {
             let result = serve_file(stream, "static/index.html", "text/html").await;
