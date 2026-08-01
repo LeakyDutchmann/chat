@@ -44,7 +44,7 @@ pub async fn handle_websocket(mut stream: TcpStream, buffer: &[u8], sender: Send
         ).await;
         return;
     }
-    let (username, _) = value.unwrap();
+    let username = value.unwrap();
     finish_handshake(&mut stream, ws_key).await;
     let ws_stream = WebSocketStream::from_raw_socket(stream, Role::Server, None).await;
     let (mut write, mut read) = ws_stream.split();

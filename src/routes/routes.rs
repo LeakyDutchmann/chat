@@ -50,7 +50,13 @@ pub async fn handle_routes(stream: TcpStream, buffer: &[u8], sender: Sender<Chat
             }
         }
         Route::Icon => {
-            return;
+            let result = serve_file(stream, "static/icon.png", "image/png").await;
+            match result {
+                Ok(_) => {}
+                Err(e) => {
+                    println!("failed to serve file: {}", e);
+                }
+            }
         }
         Route::Register(form) => {
             handle_registration(stream, db_pool, form).await;

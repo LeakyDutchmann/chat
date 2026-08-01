@@ -12,13 +12,13 @@ let usernameField = newMessageForm.querySelector("#username");
 let roomNameField = newRoomForm.querySelector("#name");
 let logoutBtn = document.getElementById("logout-btn");
 
-
 var STATE = {
   room: "lobby",
   rooms: {},
   connected: false,
 }
-// listeners 
+
+window.shouldReconnect = false;
 
 // Set up the form handler.
 newMessageForm.addEventListener("submit", (e) => {
@@ -34,7 +34,6 @@ newMessageForm.addEventListener("submit", (e) => {
       messageField.value = "";
   }
 });
-
 
 // Set up the new room handler.
 newRoomForm.addEventListener("submit", (e) => {
@@ -84,7 +83,6 @@ async function logout() {
 async function sendAuthRequest(type) {
   const username = document.getElementById("auth-username").value;
   const password = document.getElementById("auth-password").value;
-  const color = document.getElementById("auth-color").value;
 
   if (!username || !password) {
     authStatus.textContent = "Username and password required";
@@ -94,7 +92,6 @@ async function sendAuthRequest(type) {
   const body = new URLSearchParams();
   body.append("username", username);
   body.append("password", password);
-  if (color) body.append("color", color);
 
   const response = await fetch(`/${type}`, {
     method: "POST",
@@ -105,8 +102,7 @@ async function sendAuthRequest(type) {
   authStatus.textContent = data.message;
 
   if (data.status.includes("succesfully logged in") || data.status === "ok") {
-      STATE.username = username;
-      STATE.color = color || "white";   // ⭐ store chosen color
+      STATE.username = username; // ⭐ store chosen color
       document.getElementById("chat").style.display = "flex";
       document.getElementById("auth").style.display = "none";
     
@@ -117,7 +113,6 @@ async function sendAuthRequest(type) {
 }
 
 function setupAuth() {
-  const authForm = document.getElementById("auth-form");
   const loginBtn = document.getElementById("auth-login");
   const registerBtn = document.getElementById("auth-register");
   window.authStatus = document.getElementById("auth-status");
@@ -299,7 +294,6 @@ function resetUI() {
   // Clear auth fields
   document.getElementById("auth-username").value = "";
   document.getElementById("auth-password").value = "";
-  document.getElementById("auth-color").value = "";
 
   // Reinitialize demo rooms/messages
   init();
@@ -311,10 +305,9 @@ async function checkSession() {
     const data = await response.json();
 
     if (data.status === "ok") {
-      const [username, color] = data.message.split(":");
+      const username = data.message;
 
       STATE.username = username;
-      STATE.color = color;
 
       window.shouldReconnect = true;
 
@@ -337,6 +330,7 @@ async function init() {
   if (shouldReconnect != true) {
     return;
   }
+  
   await checkSession();
   
   if (!STATE.username) {
@@ -345,14 +339,6 @@ async function init() {
     document.getElementById("auth").style.flexDirection = "column";
     return;
   }
-  // Initialize some rooms.
-  addRoom("lobby");
-  addRoom("rocket");
-  changeRoom("lobby");
-  addMessage("lobby", "Rocket", "Hey! Open another browser tab, send a message.", true);
-  addMessage("rocket", "Rocket", "This is another room. Neat, huh?", true);
-
-  
 }
 
 setupAuth();

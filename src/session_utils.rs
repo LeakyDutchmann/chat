@@ -49,9 +49,8 @@ pub fn get_session_id(buffer: &[u8]) -> String {
     String::from("")
 }
 
-
-pub async fn verify_session(session_id: String, db_pool: MySqlPool) -> Option<(String, String)> {
-    let row = sqlx::query("SELECT username, color FROM users WHERE username = (SELECT username FROM session WHERE session_id = ?)")
+pub async fn verify_session(session_id: String, db_pool: MySqlPool) -> Option<String> {
+    let row = sqlx::query("SELECT username FROM users WHERE username = (SELECT username FROM session WHERE session_id = ?)")
         .bind(session_id)
         .fetch_optional(&db_pool)
         .await.unwrap();
@@ -60,8 +59,7 @@ pub async fn verify_session(session_id: String, db_pool: MySqlPool) -> Option<(S
     }
     let row = row.unwrap();
     let username: String = row.try_get("username").ok()?;
-    let color: String = row.try_get("color").ok()?;
-    Some((username, color))
+    Some(username)
 }
 
 pub async fn remove_session(session_id: String, db_pool: MySqlPool) -> Result<u64, sqlx::Error> {

@@ -185,10 +185,9 @@ pub async fn get_me(stream: TcpStream, db_pool: MySqlPool, buffer: &[u8]) {
         ).await;
         return;
     }
-    if let Some((username, color)) = verify_session(session_id, db_pool).await {
-        let line = username + ":" + &color;
+    if let Some(username) = verify_session(session_id, db_pool).await {
         send_json(
-            AuthResponse::from_ok(&line.trim()),
+            AuthResponse::from_ok(&username.trim()),
             "200",
             "OK",
             None,
