@@ -117,6 +117,13 @@ If you don't have Docker installed, follow the official guide:
 
 https://www.docker.com/get-started/
 
+If you decide to start server outside of a Docker, make sure  
+to properly install and initialize MySql database and pass it's url instead of
+```rust
+let db_url = "mysql://chat:chatpass@mysql:3306/chat_db";
+```
+in [***main***](./src/bin/main.rs) function.
+You can look up database [migrations](https://www.prisma.io/dataguide/types/relational/what-are-database-migrations) [here](./migrations/init.sql)
 ### Dependencies
 
 ```rust
