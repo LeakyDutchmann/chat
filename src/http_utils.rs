@@ -41,8 +41,8 @@ pub async fn send_json(
     let len = status_str.len();
     let mut response = format!("HTTP/1.1 {} {}\r\nContent-Type application/json\r\nContent-Length {}\r\n", status_code, status_message, len);
 
-    if additional_header.is_some() {
-        response.push_str(additional_header.unwrap());
+    if let Some(additional_header) = additional_header {
+        response.push_str(additional_header);
         response.push_str("\r\n");
     }
 

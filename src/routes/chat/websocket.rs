@@ -19,7 +19,7 @@ use serde_json::from_str;
 use tokio::signal;
 
 pub async fn handle_websocket(mut stream: TcpStream, buffer: &[u8], sender: Sender<ChatMessage>, db_pool: MySqlPool, shutdown: Sender<Shutdown>) {
-    let ws_key = match get_ws_key(String::from_utf8_lossy(&buffer).to_string()) {
+    let ws_key = match get_ws_key(String::from_utf8_lossy(buffer).to_string()) {
         Some(key) => key,
         None => {
             send_json(
@@ -32,12 +32,12 @@ pub async fn handle_websocket(mut stream: TcpStream, buffer: &[u8], sender: Send
             return;
         }
     };
-    let session_id = get_session_id(&buffer);
+    let session_id = get_session_id(buffer);
     let value = verify_session(session_id, db_pool.clone()).await;
     if value.is_none() {
         send_json(
             AuthResponse::from_err("Session is required to start a websocket connection"),
-            "404",
+            "401",
             "Unauthorized",
             None,
             stream,

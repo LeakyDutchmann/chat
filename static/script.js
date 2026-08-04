@@ -70,7 +70,7 @@ async function logout() {
 
     // Switch UI
     document.getElementById("chat").style.display = "none";
-    document.getElementById("auth").style.display = "block";
+    document.getElementById("auth").style.display = "flex";
 
   } catch (err) {
     console.error("Logout failed:", err);
@@ -237,7 +237,7 @@ function connectWebSocket() {
     return;
   }
 
-  let ws = new WebSocket("ws://127.0.0.1:8080/ws");
+  let ws = new WebSocket(`ws://${window.location.hostname}:8080/ws`);
 
   ws.onopen = () => {
     setConnectedStatus(true);

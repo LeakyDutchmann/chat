@@ -1,0 +1,56 @@
+version: "3.9"
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: mysqlx
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: chat_db
+      MYSQL_USER: chat
+      MYSQL_PASSWORD: chatpass
+    ports:
+      - "3307:3306"
+    command: >
+      mysqld
+      --mysqlx=ON
+      --mysqlx_port=33060
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  migrate:
+    image: mysql:8.0
+    depends_on:
+      mysql:
+        condition: service_healthy
+    command: >
+      sh -c "
+      until mysqladmin ping -h mysql --silent; do
+        echo 'waiting for mysql...';
+        sleep 2;
+      done;
+      mysql -h mysql -u chat -pchatpass chat_db < /migrations/init.sql
+      "
+    volumes:
+      - ./migrations:/migrations
+
+  app:
+    build: .
+    depends_on:
+      mysql:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: "mysql://chat:chatpass@mysql:3306/chat_db"
+      APP_ROOT: "/app"
+    ports:
+      - "8080:8080"
+
+volumes:
+  mysql_data:

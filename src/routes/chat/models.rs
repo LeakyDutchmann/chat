@@ -52,9 +52,9 @@ impl FromRow<'_, MySqlRow> for ChatMessage {
         let username: String = row.try_get("username")?;
         let message: String = row.try_get("message")?;
         Ok(ChatMessage {
-            room: room,
-            username: username,
-            message: message,
+            room,
+            username,
+            message,
         })
     }
 }

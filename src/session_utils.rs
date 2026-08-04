@@ -25,24 +25,22 @@ pub async fn create_session_id(username: &str) -> String {
     let mut hasher = Sha1::new();
     rand::thread_rng().fill_bytes(&mut bytes);
     hasher.update(username.as_bytes());
-    hasher.update(&bytes);
+    hasher.update(bytes);
     let result = hasher.finalize();
     hex::encode(result)
 }
 
 pub fn get_session_id(buffer: &[u8]) -> String {
-    let buffer_str = String::from_utf8_lossy(&buffer).to_string();
+    let buffer_str = String::from_utf8_lossy(buffer).to_string();
     let lines: Vec<String> = buffer_str.split("\n").map(|s| s.to_string()).collect();
     for line in lines {
         if line.is_empty() {
             break;
         }
-        if let Some((key, value)) = line.split_once(":") {
-            if key == "Cookie" {
-                let (a, b) = value.split_once("=").unwrap();
-                if a.trim() == "session" {
-                    return b.trim().to_string();
-                }
+        if let Some((key, value)) = line.split_once(":") && key == "Cookie" {
+            let (a, b) = value.split_once("=").unwrap();
+            if a.trim() == "session" {
+                return b.trim().to_string();
             }
         }
     }
@@ -54,9 +52,7 @@ pub async fn verify_session(session_id: String, db_pool: MySqlPool) -> Option<St
         .bind(session_id)
         .fetch_optional(&db_pool)
         .await.unwrap();
-    if row.is_none() {
-        return None;
-    }
+    row.as_ref()?;
     let row = row.unwrap();
     let username: String = row.try_get("username").ok()?;
     Some(username)

@@ -4,6 +4,7 @@ use super::history::fetch_history;
 use super::auth::endpoints::{handle_registration, handle_authentication, handle_logout, get_me};
 use crate::fileserver::serve_file;
 use super::route_models::Route;
+use crate::fileserver::get_path;
 
 use sqlx::mysql::MySqlPool;
 use tokio::sync::broadcast::Sender;
@@ -11,10 +12,10 @@ use tokio::net::TcpStream;
 use crate::Shutdown;
 
 pub async fn handle_routes(stream: TcpStream, buffer: &[u8], sender: Sender<ChatMessage>, db_pool: MySqlPool, shutdown: Sender<Shutdown>) {
-    let route = route_models::Route::from_buffer(&buffer);
+    let route = route_models::Route::from_buffer(buffer);
     match route {
         Route::Init => {
-            let result = serve_file(stream, "static/index.html", "text/html").await;
+            let result = serve_file(stream, &get_path("index.html"), "text/html").await;
             match result {
                 Ok(_) => {}
                 Err(e) => {
@@ -23,7 +24,7 @@ pub async fn handle_routes(stream: TcpStream, buffer: &[u8], sender: Sender<Chat
             }
         }
         Route::Js => {
-            let result = serve_file(stream, "static/script.js", "application/javascript").await;
+            let result = serve_file(stream, &get_path("script.js"), "application/javascript").await;
             match result {
                 Ok(_) => {}
                 Err(e) => {
@@ -32,7 +33,7 @@ pub async fn handle_routes(stream: TcpStream, buffer: &[u8], sender: Sender<Chat
             }
         }
         Route::CssReset => {
-            let result = serve_file(stream, "static/reset.css", "text/css").await;
+            let result = serve_file(stream, &get_path("reset.css"), "text/css").await;
             match result {
                 Ok(_) => {}
                 Err(e) => {
@@ -41,7 +42,7 @@ pub async fn handle_routes(stream: TcpStream, buffer: &[u8], sender: Sender<Chat
             }
         }
         Route::StyleCss => {
-            let result = serve_file(stream, "static/style.css", "text/css").await;
+            let result = serve_file(stream, &get_path("style.css"), "text/css").await;
             match result {
                 Ok(_) => {}
                 Err(e) => {
@@ -50,7 +51,7 @@ pub async fn handle_routes(stream: TcpStream, buffer: &[u8], sender: Sender<Chat
             }
         }
         Route::Icon => {
-            let result = serve_file(stream, "static/icon.png", "image/png").await;
+            let result = serve_file(stream, &get_path("icon.png"), "image/png").await;
             match result {
                 Ok(_) => {}
                 Err(e) => {

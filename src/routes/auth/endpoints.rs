@@ -48,10 +48,9 @@ pub async fn handle_registration(stream: TcpStream, db_pool: MySqlPool, form: Au
         return;
     }
     let password_hash = hash_password(&form.password).expect("called unwrap on None password");
-    let result = sqlx::query("INSERT INTO users(username, password_hash, color) values(?, ?, ?)")
+    let result = sqlx::query("INSERT INTO users(username, password_hash) values(?, ?)")
         .bind(&form.username)
         .bind(password_hash)
-        .bind(&form.color)
         .execute(&db_pool)
         .await;
     match result {
@@ -90,7 +89,7 @@ pub async fn handle_authentication(stream: TcpStream, db_pool: MySqlPool, form: 
         ).await;
         return;
     }
-    let result = sqlx::query("SELECT password_hash, color FROM users WHERE username =?")
+    let result = sqlx::query("SELECT password_hash FROM users WHERE username =?")
         .bind(&form.username)
         .fetch_optional(&db_pool)
         .await;
@@ -105,16 +104,8 @@ pub async fn handle_authentication(stream: TcpStream, db_pool: MySqlPool, form: 
         return;
     }
     let row_opt = result.unwrap();
-    if row_opt.is_none() {
-        send_json(
-            AuthResponse::from_err("User does not exist"),
-            "400",
-            "BAD REQUEST",
-            None,
-            stream
-        ).await;
-    } else {
-        let password_hash: String = row_opt.unwrap().try_get("password_hash").unwrap();
+    if let Some(row) = row_opt {
+        let password_hash: String = row.try_get("password_hash").unwrap();
         let parsed_hash = PasswordHash::new(&password_hash).unwrap();
         let argon2 = Argon2::default();
         if argon2.verify_password(form.password.as_bytes(), &parsed_hash).is_ok() {         
@@ -136,7 +127,14 @@ pub async fn handle_authentication(stream: TcpStream, db_pool: MySqlPool, form: 
                 stream
             ).await;
         }
-        
+    } else {
+        send_json(
+            AuthResponse::from_err("User does not exist"),
+            "400",
+            "BAD REQUEST",
+            None,
+            stream
+        ).await;
     }
 }
 
@@ -161,7 +159,6 @@ pub async fn handle_logout(stream: TcpStream, db_pool: MySqlPool, buffer: &[u8])
             None,
             stream,
         ).await;
-        return;
     } else {
         send_json(
             AuthResponse::from_ok("Session is finished succesfully"),
@@ -187,7 +184,7 @@ pub async fn get_me(stream: TcpStream, db_pool: MySqlPool, buffer: &[u8]) {
     }
     if let Some(username) = verify_session(session_id, db_pool).await {
         send_json(
-            AuthResponse::from_ok(&username.trim()),
+            AuthResponse::from_ok(username.trim()),
             "200",
             "OK",
             None,

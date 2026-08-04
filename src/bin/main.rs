@@ -11,11 +11,11 @@ use tokio::select;
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
-    let listener = TcpListener::bind("127.0.0.1:8080").await?;
+    let listener = TcpListener::bind("0.0.0.0:8080").await?;
     let (shutdown_tx, _) = tokio::sync::broadcast::channel::<Shutdown>(1024);
     let mut shutdown_rx = shutdown_tx.subscribe();
     let (tx, _rx) = tokio::sync::broadcast::channel::<ChatMessage>(1024);
-    let db_url = "mysql://root:Tima1405pereviz@localhost:3306/chat_db";
+    let db_url = "mysql://chat:chatpass@mysql:3306/chat_db";
     let db_pool = estabilish_connection(db_url).await.unwrap();
     log("Listening on 127.0.0.1:8080", "blue", true);
     loop {
