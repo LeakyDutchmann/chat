@@ -1,7 +1,7 @@
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use std::path::{PathBuf, Path};
+use std::path::PathBuf;
 
 
 pub async fn serve_file(mut stream: TcpStream, path: &str, content_type: &str) -> std::io::Result<()> {
@@ -29,10 +29,8 @@ pub async fn serve_file(mut stream: TcpStream, path: &str, content_type: &str) -
 pub fn get_path(file: &str) -> String {
     let app_root = std::env::var("APP_ROOT").unwrap_or_else(|_| ".".to_string());
     if let Some(path) = PathBuf::from(app_root).join("static").join(file).to_str() {
-        println!("path: {}", path);
         path.to_string()
     } else {
         "".to_string()
     }
-    
 }
