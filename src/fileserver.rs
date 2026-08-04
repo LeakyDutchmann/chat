@@ -3,7 +3,6 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use std::path::PathBuf;
 
-
 pub async fn serve_file(mut stream: TcpStream, path: &str, content_type: &str) -> std::io::Result<()> {
     let mut file = File::open(path).await?;
     let metadata = file.metadata().await?;

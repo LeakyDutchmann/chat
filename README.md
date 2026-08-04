@@ -1,51 +1,67 @@
-# Chat 
+# Chat
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-![Tokio](https://img.shields.io/badge/Tokio-1.53-red)
-![SQLx](https://img.shields.io/badge/SQLx-0.9-blue)
-![Serde](https://img.shields.io/badge/Serde-1.0-purple)
+![Rust](https://img.shields.io/badge/Rust-000000?logo=rust&logoColor=white)
+![Tokio](https://img.shields.io/badge/Tokio-1.53-blue?logo=tokio)
+![SQLx](https://img.shields.io/badge/SQLx-0.9-orange?logo=database)
+![Serde](https://img.shields.io/badge/Serde-1.0-purple?logo=rust)
+![Docker](https://img.shields.io/badge/Docker-blue?logo=docker)
+![MySQL](https://img.shields.io/badge/MySQL-4479A1?logo=mysql&logoColor=white)
 
-A fully async framework-free web chat built from scratch in Rust -- including  
-manual HTTP parsing, WebSocket implementation, Cookies and SQLx-powered persistence.
-
+A fully async, framework-free web chat built from scratch in Rust, including
+manual HTTP parsing, WebSocket implementation, cookies, and SQLx-powered persistence.
 
 ## Features
+
 - User registration with Argon2 password hashing
 - Login/logout endpoints
 - Session-based authentication using cookies
-- Database integration via Sqlx
+- Database integration via SQLx
 - WebSocket chat support
-- Session verification via /me endpoint
+- Session verification via the `/me` endpoint
 - Clean service-layer architecture
-- Pure async framework
+- Pure async architecture
 - Manual parsing and handling of HTTP requests
-- Sha1-hashed cookies
+- SHA-1-hashed session cookies
 - Frontend session restoration
 - Session cleanup on server shutdown
-- Manually implemented simple fileserver
+- Manually implemented simple file server
+- Pre-built Docker container
+- Can be run both inside and outside Docker
+
 ## Tech Stack
+
 ### Backend
+
 - Rust
 - Custom-built web framework (routing, sessions, WebSockets)
 - Tokio (async runtime)
-- Tokio-tungstenite (WebSocket stream)
+- Tokio-Tungstenite (WebSocket implementation)
 - SQLx (database layer)
 - MySQL (persistent storage)
 - Session cookies (authentication)
 
 ### Frontend
+
 - HTML / CSS / JavaScript
 - Fetch API
 - WebSockets (real-time messaging)
 
 ### Security
+
 - Argon2 (password hashing)
 
 ### Serialization
+
 - Serde (JSON handling)
 
+### Deployment
+
+- Docker
+
 ## Structure
-```
+
+```text
 SRC
 │   db.rs
 │   fileserver.rs
@@ -72,50 +88,37 @@ SRC
             models.rs
             websocket.rs
 ```
+
 ## Configuration
-### MySql migrations
-In order to make server work, you have to instal my
-```sql
-create database chat_db;
-```
-```sql
-use chat_db;
-```
-```sql
-create table messages(
-room varchar(255) not null,
-username varchar(255) not null,
-message text not null
-);
-```
-```sql
-create table users(
-id int unique primary key auto_increment,
-username varchar(255) not null,
-password_hash varchar(255) not null
-);
-```
-```sql
-create table session (
-id int unique primary key auto_increment,
-username varchar(255) not null,
-session_id varchar(255) not null
-);
-```
-### Db connection
-To connect you database you only need to paste it's url into `db_url` variable.
-```rust
-#[tokio::main]
-async fn main() -> io::Result<()> {
-    let listener = TcpListener::bind("127.0.0.1:8080").await?;
-    let (shutdown_tx, _) = tokio::sync::broadcast::channel::<Shutdown>(1024);
-    let mut shutdown_rx = shutdown_tx.subscribe();
-    let (tx, _rx) = tokio::sync::broadcast::channel::<ChatMessage>(1024);
-    let db_url = "mysql://user:password@localhost:3306/dbname";
-//snippet
+
+Clone the repository:
+
+```bash
+git clone https://github.com/LeakyDutchmann/chat.git
 ```
 
+Then build and start the application:
+
+```bash
+docker compose up --build
+```
+
+You're ready to go.
+
+To start the application again later:
+
+```bash
+docker compose up
+```
+
+or launch it from Docker Desktop.
+
+If you don't have Docker installed, follow the official guide:
+
+https://www.docker.com/get-started/
+
 ### Dependencies
+
 ```rust
 anyhow = "1.0.104"
 argon2 = "0.5.3"
@@ -136,34 +139,64 @@ urlencoding = "2.1.3"
 ```
 
 ## Endpoints
+
 ### GET /register
-creates user and saves it to a database. Also sets up a cookie for a browser. Responds with ``400 BAD REQUEST`` if user exists.
+
+Creates a new user and stores it in the database. Also sets a session cookie in the browser.
+
+Responds with `400 BAD REQUEST` if the user already exists.
+
 ### GET /login
-looks up for a user in database, verifies password and sets up cookie for a browser  
-If user does not exist, or incorrect password was passed - it responsds with ``400 BAD REQUEST`` and json message to specify problem.
-### GET /me 
-checks a cookie header and looks up for a match in databse if found, returns username as a response.  
-Responds with ``404 NOT FOUND`` if no match is found.
+
+Looks up the user in the database, verifies the password, and sets a session cookie.
+
+If the user does not exist or the password is incorrect, the server responds with `400 BAD REQUEST` along with a JSON message describing the error.
+
+### GET /me
+
+Checks the cookie header and looks for a matching session in the database.
+
+If found, returns the authenticated user's username.
+
+Responds with `404 NOT FOUND` if no valid session is found.
+
 ### GET /logout
-clears the cookie and logs out the user.
-### GET /history 
-collects all messages from database and returns them to client as an array.
-### GET /ws 
-upgrades connection to a WebSocket if user is verified. Responds with ``400 BAD REQUEST`` if there is  no cookie header in request. Responds with ``401 UNAUTHORIZED`` if cookie is invalid.
-### fileserver: those are just endpoints that serve static files
-- GET / responds with index.html
-- GET /style.css responds with style.css
-- GET /reset.css responds with reset.css
-- GET /script.js responds with script.js
-- GET /favicon.ico responds with page's icon
-## A word about 
-This project is remake of my old project:
-https://github.com/LeakyDutchmann/Chat-app  
-but with this time I decided to try implementing everythings without any   
-framework such as [Rocket](https://rocket.rs/) or [Axum](https://crates.io/crates/axum)  
-That meant, that I would have to parse all HTTP reaquests manually  
-and implement fully async backend server on my own.  
-That was what I did.
+
+Clears the session cookie and logs the user out.
+
+### GET /history
+
+Retrieves all chat messages from the database and returns them as a JSON array.
+
+### GET /ws
+
+Upgrades the connection to a WebSocket if the user is authenticated.
+
+Responds with `400 BAD REQUEST` if the request does not contain a cookie header.
+
+Responds with `401 UNAUTHORIZED` if the cookie is invalid.
+
+### File server
+
+These endpoints serve static files:
+
+- `GET /` → `index.html`
+- `GET /style.css` → `style.css`
+- `GET /reset.css` → `reset.css`
+- `GET /script.js` → `script.js`
+- `GET /favicon.ico` → the site's icon
+
+## A word about this project
+
+This project is a remake of my previous project:
+
+https://github.com/LeakyDutchmann/Chat-app
+
+This time, I decided to implement everything without using a web framework such as Rocket or Axum.
+
+That meant manually parsing HTTP requests, implementing routing, handling sessions, and building a fully asynchronous backend server from scratch.
+
+That's exactly what this project does.
 
 ## License
 
